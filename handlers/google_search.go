@@ -41,15 +41,10 @@ func (h *GoogleSearchHandler) Search(c *gin.Context) {
 
 	// 创建搜索记录
 	record := models.SearchRecord{
-		Source:   "google",
-		Keyword:  req.Query,
-		Location: req.Location,
-		Language: req.Language,
-		Pages:    req.Pages,
-		Status:   0,
-	}
-	if record.Language == "" {
-		record.Language = "zh-CN"
+		Source:  "google",
+		Keyword: req.Query,
+		Pages:   req.Pages,
+		Status:  0,
 	}
 	if err := h.db.Create(&record).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建记录失败"})

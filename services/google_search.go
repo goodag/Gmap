@@ -49,7 +49,7 @@ func NewGoogleSearchService(apiKey, cx string) *GoogleSearchService {
 
 // SearchGoogle 调用 Google Custom Search API 搜索，返回 URL 列表
 // pages: 搜索页数（每页10条），最多10页（100条）
-func (s *GoogleSearchService) SearchGoogle(query, location, language string, pages int) ([]GoogleSearchItem, error) {
+func (s *GoogleSearchService) SearchGoogle(query string, pages int) ([]GoogleSearchItem, error) {
 	if s.apiKey == "" || s.cx == "" {
 		return nil, fmt.Errorf("未配置 Google Custom Search API Key 或 Custom Search Engine ID")
 	}
@@ -60,17 +60,11 @@ func (s *GoogleSearchService) SearchGoogle(query, location, language string, pag
 		pages = 10
 	}
 
-	// 如果有地区限制，附加到查询
-	q := query
-	if location != "" {
-		q = query + " " + location
-	}
-
 	var allItems []GoogleSearchItem
 
 	for page := 0; page < pages; page++ {
 		start := page*10 + 1 // Google Custom Search start index: 1, 11, 21, ...
-		items, err := s.fetchPage(q, language, start)
+		items, err := s.fetchPage(query, start)
 		if err != nil {
 			if page == 0 {
 				return nil, err
@@ -90,17 +84,13 @@ func (s *GoogleSearchService) SearchGoogle(query, location, language string, pag
 	return allItems, nil
 }
 
-func (s *GoogleSearchService) fetchPage(query, language string, start int) ([]GoogleSearchItem, error) {
+func (s *GoogleSearchService) fetchPage(query string, start int) ([]GoogleSearchItem, error) {
 	params := url.Values{}
 	params.Set("key", s.apiKey)
 	params.Set("cx", s.cx)
 	params.Set("q", query)
 	params.Set("start", fmt.Sprintf("%d", start))
 	params.Set("num", "10")
-	if language != "" {
-		params.Set("hl", language)
-		params.Set("lr", "lang_"+strings.Split(language, "-")[0])
-	}
 
 	apiURL := "https://www.googleapis.com/customsearch/v1?" + params.Encode()
 
@@ -129,11 +119,9 @@ func (s *GoogleSearchService) fetchPage(query, language string, start int) ([]Go
 
 // SearchAndScrapeRequest 搜索+爬取请求参数
 type SearchAndScrapeRequest struct {
-	Query    string        `json:"query" binding:"required"`
-	Location string        `json:"location"`
-	Language string        `json:"language"`
-	Pages    int           `json:"pages"`
-	Filter   *FilterConfig `json:"filter"`
+	Query  string        `json:"query" binding:"required"`
+	Pages  int           `json:"pages"`
+	Filter *FilterConfig `json:"filter"`
 }
 
 // SearchAndScrapeResult 单个网站的搜索+爬取结果
@@ -154,16 +142,12 @@ func (s *GoogleSearchService) RunSearchAndScrape(
 	progressFn func(done, total int, result *SearchAndScrapeResult),
 ) ([]SearchAndScrapeResult, error) {
 	// Step 1: 谷歌搜索获取 URL 列表
-	lang := req.Language
-	if lang == "" {
-		lang = "zh-CN"
-	}
 	pages := req.Pages
 	if pages == 0 {
 		pages = 1
 	}
 
-	items, err := s.SearchGoogle(req.Query, req.Location, lang, pages)
+	items, err := s.SearchGoogle(req.Query, pages)
 	if err != nil {
 		return nil, err
 	}

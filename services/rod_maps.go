@@ -24,16 +24,34 @@ import (
 
 // RodMapsService 使用无头浏览器直接爬取 Google Maps
 type RodMapsService struct {
-	proxyAddr  string
-	chromePath string
+	proxyAddr   string
+	chromePath  string
+	stopFlag    bool
 }
 
 func NewRodMapsService() *RodMapsService {
 	cfg := config.Get()
 	return &RodMapsService{
-		proxyAddr:  cfg.Proxy.Address,
-		chromePath: cfg.Proxy.ChromePath,
+		proxyAddr:   cfg.Proxy.Address,
+		chromePath:  cfg.Proxy.ChromePath,
+		stopFlag:    false,
 	}
+}
+
+// Stop 停止所有正在进行的搜索任务
+func (s *RodMapsService) Stop() {
+	s.stopFlag = true
+	log.Println("[Rod] 收到停止信号，将停止所有搜索任务")
+}
+
+// ResetStopFlag 重置停止标志
+func (s *RodMapsService) ResetStopFlag() {
+	s.stopFlag = false
+}
+
+// ShouldStop 检查是否应该停止
+func (s *RodMapsService) ShouldStop() bool {
+	return s.stopFlag
 }
 
 // RodSearchRequest Rod搜索请求
@@ -171,6 +189,9 @@ func (s *RodMapsService) SearchNearby(req RodSearchRequest) ([]models.Company, e
 
 // ConcurrentSearch 并发搜索多个城市/地区
 func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurrentResult {
+	// 重置停止标志
+	s.ResetStopFlag()
+	
 	if req.Concurrent <= 0 {
 		req.Concurrent = 2
 	}
@@ -195,11 +216,26 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 		wg.Add(1)
 		go func(idx int, cityName string) {
 			defer wg.Done()
+			
+			// 检查是否已停止
+			if s.ShouldStop() {
+				log.Printf("[Rod-并发] 任务已停止，跳过城市: %s", cityName)
+				results[idx] = RodConcurrentResult{City: cityName, Error: "任务已停止"}
+				return
+			}
+			
 			sem <- struct{}{}        // 获取信号量
 			defer func() { <-sem }() // 释放信号量
 
 			start := time.Now()
 			log.Printf("[Rod-并发] 开始搜索 [%d/%d]: %s + %s", idx+1, len(req.Cities), req.Keyword, cityName)
+
+			// 再次检查是否已停止
+			if s.ShouldStop() {
+				log.Printf("[Rod-并发] 任务已停止，取消搜索: %s", cityName)
+				results[idx] = RodConcurrentResult{City: cityName, Error: "任务已停止"}
+				return
+			}
 
 			companies, err := s.SearchNearby(RodSearchRequest{
 				Keyword:  req.Keyword,

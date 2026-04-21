@@ -553,24 +553,11 @@
         <div class="search-panel">
             <h2>谷歌关键词搜索 → Colly爬取 → 提取联系信息</h2>
             <div class="form-row">
-                <div class="form-group" style="flex:3;">
+                <div class="form-group" style="flex:4;">
                     <label>搜索关键词 *</label>
-                    <input type="text" id="searchQuery" placeholder="如: 深圳 外贸公司, Shenzhen electronics supplier..." />
+                    <input type="text" id="searchQuery" placeholder="品类名 in 地区" />
                 </div>
                 <div class="form-group" style="flex:1;">
-                    <label>地区限制（可选）</label>
-                    <input type="text" id="searchLocation" placeholder="如: 中国, US..." />
-                </div>
-                <div class="form-group" style="flex:1;">
-                    <label>语言</label>
-                    <select id="searchLang">
-                        <option value="zh-CN">中文</option>
-                        <option value="en">English</option>
-                        <option value="ja">日本語</option>
-                        <option value="ko">한국어</option>
-                    </select>
-                </div>
-                <div class="form-group" style="flex:0.5;">
                     <label>页数</label>
                     <select id="searchPages">
                         <option value="1">1页</option>
@@ -615,7 +602,7 @@
 
             <div style="margin-top: 16px; display: flex; gap: 12px;">
                 <button class="btn btn-primary" id="btnSearch" onclick="startSearch()">🔍 开始搜索并爬取</button>
-                <button class="btn btn-outline" onclick="loadTasks()">📋 查看历史任务</button>
+                <button class="btn btn-danger" id="btnStop" onclick="stopSearch()" style="display:none;">⏹️ 停止任务</button>
             </div>
 
             <div class="progress-bar" id="progressBar">
@@ -755,14 +742,23 @@
             return Object.keys(filter).length ? filter : null;
         }
 
+        // 搜索控制器
+        let abortController = null;
+
         // 搜索
         async function startSearch() {
             const query = document.getElementById('searchQuery').value.trim();
             if (!query) { alert('请输入搜索关键词'); return; }
 
             const btn = document.getElementById('btnSearch');
+            const stopBtn = document.getElementById('btnStop');
+            
             btn.disabled = true;
             btn.textContent = '⏳ 搜索爬取中...';
+            stopBtn.style.display = 'block';
+
+            // 创建中止控制器
+            abortController = new AbortController();
 
             const progressBar = document.getElementById('progressBar');
             progressBar.classList.add('show');
@@ -771,8 +767,6 @@
 
             const body = {
                 query: query,
-                location: document.getElementById('searchLocation').value.trim(),
-                language: document.getElementById('searchLang').value,
                 pages: parseInt(document.getElementById('searchPages').value),
                 filter: buildFilter()
             };
@@ -781,7 +775,8 @@
                 const resp = await fetch('/api/google-search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(body),
+                    signal: abortController.signal
                 });
                 const data = await resp.json();
 
@@ -796,12 +791,29 @@
                     alert('搜索失败: ' + (data.msg || '未知错误'));
                 }
             } catch (err) {
-                alert('请求失败: ' + err.message);
+                if (err.name !== 'AbortError') {
+                    alert('请求失败: ' + err.message);
+                }
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🔍 开始搜索并爬取';
+                document.getElementById('btnStop').style.display = 'none';
+                abortController = null;
                 setTimeout(() => progressBar.classList.remove('show'), 2000);
             }
+        }
+
+        // 停止搜索任务
+        function stopSearch() {
+            if (abortController) {
+                abortController.abort();
+                showToast('⏹️ 任务已停止', 'info');
+            }
+        }
+
+        // 显示提示
+        function showToast(msg, type) {
+            alert(msg);
         }
 
         // 渲染结果
@@ -958,7 +970,7 @@
                     return `<div class="task-item" onclick="loadTaskResults(${t.id})">
                         <div class="task-info">
                             <div class="task-query">🔍 ${t.query}</div>
-                            <div class="task-time">${t.location ? t.location + ' | ' : ''}${new Date(t.created_at).toLocaleString()}</div>
+                            <div class="task-time">${new Date(t.created_at).toLocaleString()}</div>
                         </div>
                         <div class="task-stats">
                             <span class="stat">找到 <strong>${t.total_found}</strong></span>

@@ -46,6 +46,7 @@ func main() {
 	googleSearchHandler := handlers.NewGoogleSearchHandler(db)
 	cronHandler := handlers.NewCronHandler(db, scheduler)
 	exportHandler := handlers.NewExportHandler(db)
+	cityHandler := handlers.NewCityHandler()
 
 	r := gin.Default()
 
@@ -77,6 +78,7 @@ func main() {
 	{
 		api.POST("/search", searchHandler.Search)
 		api.POST("/search/next", searchHandler.SearchNextPage)
+		api.POST("/search/stop", searchHandler.StopSearch)
 		api.GET("/place/detail", searchHandler.GetPlaceDetail)
 		api.GET("/companies", searchHandler.GetCompanies)
 
@@ -84,8 +86,8 @@ func main() {
 		api.GET("/records/:id", searchHandler.GetRecordDetail)
 		api.DELETE("/records/:id", searchHandler.DeleteRecord)
 
-		// AI分析
-		api.POST("/ai/analyze", searchHandler.AIAnalyze)
+		// AI分析（已禁用）
+		// api.POST("/ai/analyze", searchHandler.AIAnalyze)
 
 		// 公司邮箱
 		api.GET("/companies/:id/emails", searchHandler.GetCompanyEmails)
@@ -119,6 +121,10 @@ func main() {
 		// 导出Excel
 		api.GET("/export/record/:id", exportHandler.ExportByRecord)
 		api.GET("/export/all", exportHandler.ExportAll)
+
+		// 城市数据
+		api.GET("/continents", cityHandler.GetContinents)
+		api.GET("/cities", cityHandler.GetCitiesByCountry)
 	}
 
 	port := cfg.Server.Port

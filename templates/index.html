@@ -32,8 +32,13 @@
             font-weight: 600;
         }
 
-        .header .admin-link {
+        .header .nav-links {
             margin-left: auto;
+            display: flex;
+            gap: 12px;
+        }
+
+        .header .nav-links a {
             color: white;
             text-decoration: none;
             background: rgba(255, 255, 255, 0.2);
@@ -42,7 +47,7 @@
             font-size: 13px;
         }
 
-        .header .admin-link:hover {
+        .header .nav-links a:hover {
             background: rgba(255, 255, 255, 0.3);
         }
 
@@ -651,8 +656,11 @@
             <path
                 d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
         </svg>
-        <h1>Google Map 商家搜索系统</h1>
-        <a href="/admin" class="admin-link">📊 后台管理</a>
+        <h1>📍 Google Map 商家搜索系统</h1>
+        <div class="nav-links">
+            <a href="/google-search">🔍 谷歌搜索</a>
+            <a href="/admin">📊 后台管理</a>
+        </div>
     </div>
 
     <div class="container">
@@ -695,11 +703,23 @@
                         </button>
                     </div>
                     <div id="rodOptions" style="display:none;margin-top:8px;">
-                        <label>🌍 城市名（可直接输入城市，无需在地图定位）</label>
-                        <input type="text" id="rodCityInput" placeholder="如: New York, Tokyo, London, Paris..."
-                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;" />
+                        <label>🌍 选择洲</label>
+                        <select id="rodContinent" onchange="loadRodCountries()"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;">
+                            <option value="">请选择洲</option>
+                        </select>
+                        <label>🌎 选择国家</label>
+                        <select id="rodCountry" onchange="loadRodCities()"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;">
+                            <option value="">请先选择洲</option>
+                        </select>
+                        <label>🏙️ 选择城市</label>
+                        <select id="rodCity"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;">
+                            <option value="">请先选择国家</option>
+                        </select>
                         <div style="font-size:11px;color:#1a73e8;margin-bottom:8px;">
-                            💡 Rod模式下可直接输入城市名搜索，系统会自动解析位置，无需手动定位坐标
+                            💡 请依次选择洲、国家、城市进行搜索
                         </div>
                         <label>最大获取数量</label>
                         <input type="number" id="maxCount" value="30" min="5" max="200"
@@ -713,10 +733,33 @@
                         </div>
                     </div>
                     <div id="rodConcurrentOptions" style="display:none;margin-top:8px;">
-                        <label>🌍 搜索城市（每行一个城市，同时并发搜索）</label>
-                        <textarea id="rodCitiesInput" rows="4"
-                            placeholder="每行输入一个城市，例如：&#10;New York&#10;Los Angeles&#10;Chicago&#10;Houston"
-                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;resize:vertical;"></textarea>
+                        <label>🌍 选择洲</label>
+                        <select id="rodConcurrentContinent" onchange="loadRodConcurrentCountries()"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;">
+                            <option value="">请选择洲</option>
+                        </select>
+                        <label>🌎 选择国家</label>
+                        <select id="rodConcurrentCountry" onchange="loadRodConcurrentCities()"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;">
+                            <option value="">请先选择洲</option>
+                        </select>
+                        <label>🏙️ 选择城市（可多选，默认全选）</label>
+                        <select id="rodConcurrentCity" multiple
+                            style="width:100%;height:150px;max-height:150px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;overflow-y:auto;">
+                            <option value="">请先选择国家</option>
+                        </select>
+                        <button onclick="addSelectedCity()"
+                            style="width:100%;padding:8px 12px;border:1px solid #1a73e8;border-radius:8px;font-size:13px;background:#1a73e8;color:white;cursor:pointer;margin-bottom:6px;">
+                            ➕ 添加选中城市到列表
+                        </button>
+                        <label>已选城市（最多10个）</label>
+                        <div id="selectedCitiesList" style="min-height:40px;border:1px dashed #ddd;border-radius:8px;padding:6px;margin-bottom:6px;">
+                            <span style="color:#999;">暂无选中城市</span>
+                        </div>
+                        <button onclick="clearSelectedCities()"
+                            style="width:100%;padding:6px 12px;border:1px solid #dc3545;border-radius:8px;font-size:12px;background:white;color:#dc3545;cursor:pointer;margin-bottom:8px;">
+                            🗑️ 清空已选城市
+                        </button>
                         <div style="display:flex;gap:8px;margin-bottom:6px;">
                             <div style="flex:1;">
                                 <label style="font-size:12px;">并发数（同时搜索几个城市）</label>
@@ -729,18 +772,6 @@
                                     style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
                             </div>
                         </div>
-                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
-                            <span style="font-size:11px;color:#666;">快捷填充：</span>
-                            <button onclick="fillCities('us')"
-                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🇺🇸
-                                美国主要城市</button>
-                            <button onclick="fillCities('eu')"
-                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🇪🇺
-                                欧洲主要城市</button>
-                            <button onclick="fillCities('asia')"
-                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🌏
-                                亚洲主要城市</button>
-                        </div>
                         <div
                             style="background:#d4edda;border:1px solid #28a745;border-radius:6px;padding:8px;margin-top:6px;font-size:11px;color:#155724;">
                             🚀 并发模式同时启动多个浏览器，速度翻倍！<br>
@@ -750,7 +781,7 @@
                     </div>
                 </div>
 
-                <!-- AI分析设置 -->
+                <!-- AI分析设置（已禁用）
                 <div
                     style="margin-top:12px;padding:10px;background:#f0f7ff;border:1px solid #b3d4fc;border-radius:8px;">
                     <label style="font-weight:600;color:#1a73e8;">🤖 AI智能分析（豆包 Doubao）</label>
@@ -767,9 +798,15 @@
                     <div style="font-size:11px;color:#666;margin-top:4px;">
                         💡 AI分析每个公司网页，评分低于阈值的公司将被过滤不入库（0=不过滤全部保留）
                     </div>
-                </div>
+                </div> -->
 
                 <button class="btn-search" id="btnSearch" onclick="doSearch()">🔍 搜索附近商家</button>
+                <button id="btnStop" onclick="stopSearch()" style="display:none;margin-top:6px;width:100%;padding:8px 12px;border:1px solid #dc3545;border-radius:8px;font-size:13px;background:#dc3545;color:white;cursor:pointer;">
+                    ⏹️ 停止任务
+                </button>
+                <div id="searchStatus" class="search-status" style="margin-top:8px;padding:8px 12px;border-radius:8px;font-size:13px;text-align:center;background:#e8f5e9;color:#155724;border:1px solid #c3e6cb;">
+                    ✅ 已完成
+                </div>
                 <div class="coord-info" id="coordInfo">📍 拖动地图或点击设置搜索中心 | 当前: --</div>
             </div>
 
@@ -967,23 +1004,218 @@
             });
             document.getElementById('rodOptions').style.display = (mode === 'rod') ? 'block' : 'none';
             document.getElementById('rodConcurrentOptions').style.display = (mode === 'rod_concurrent') ? 'block' : 'none';
+            
+            // 隐藏/显示半径设置
+            const radiusGroup = document.querySelector('.radius-group');
+            if (mode === 'rod' || mode === 'rod_concurrent') {
+                radiusGroup.style.display = 'none';
+            } else {
+                radiusGroup.style.display = 'block';
+            }
         }
 
-        // 快捷填充城市
-        function fillCities(region) {
-            const cities = {
-                us: 'New York\nLos Angeles\nChicago\nHouston\nPhoenix\nPhiladelphia\nSan Antonio\nSan Diego\nDallas\nSan Jose',
-                eu: 'London\nParis\nBerlin\nMadrid\nRome\nAmsterdam\nVienna\nBrussels\nBarcelona\nMunich',
-                asia: 'Tokyo\nSeoul\nBangkok\nSingapore\nKuala Lumpur\nJakarta\nManila\nHo Chi Minh City\nDubai\nMumbai'
-            };
-            document.getElementById('rodCitiesInput').value = cities[region] || '';
+        // 城市数据缓存
+        let continentsData = [];
+        let selectedCities = [];
+
+        // 初始化城市数据
+        async function initCitiesData() {
+            try {
+                const resp = await fetch('/api/continents');
+                if (!resp.ok) {
+                    throw new Error('HTTP error ' + resp.status);
+                }
+                const data = await resp.json();
+                console.log('城市数据加载成功:', data);
+                if (data.code === 0 && data.data && data.data.length > 0) {
+                    continentsData = data.data;
+                    loadContinentsToSelect('rodContinent');
+                    loadContinentsToSelect('rodConcurrentContinent');
+                    console.log('洲数据已加载，共 ' + continentsData.length + ' 个洲');
+                } else {
+                    console.error('城市数据格式错误:', data);
+                    showToast('城市数据加载失败', 'error');
+                }
+            } catch (e) {
+                console.error('加载城市数据失败:', e);
+                showToast('无法加载城市数据，请检查服务器是否运行', 'error');
+            }
+        }
+
+        // 加载洲到下拉框
+        function loadContinentsToSelect(selectId) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">请选择洲</option>';
+            continentsData.forEach(continent => {
+                const option = document.createElement('option');
+                option.value = continent.name_en;
+                option.textContent = continent.name + ' (' + continent.name_en + ')';
+                select.appendChild(option);
+            });
+        }
+
+        // 单城市模式 - 加载国家
+        function loadRodCountries() {
+            const continentName = document.getElementById('rodContinent').value;
+            const countrySelect = document.getElementById('rodCountry');
+            const citySelect = document.getElementById('rodCity');
+
+            countrySelect.innerHTML = '<option value="">请先选择洲</option>';
+            citySelect.innerHTML = '<option value="">请先选择国家</option>';
+
+            if (!continentName) return;
+
+            const continent = continentsData.find(c => c.name_en === continentName);
+            if (continent) {
+                continent.countries.forEach(country => {
+                    const option = document.createElement('option');
+                    option.value = country.code;
+                    option.textContent = country.name + ' (' + country.name_en + ')';
+                    countrySelect.appendChild(option);
+                });
+            }
+        }
+
+        // 单城市模式 - 加载城市
+        function loadRodCities() {
+            const countryCode = document.getElementById('rodCountry').value;
+            const citySelect = document.getElementById('rodCity');
+
+            citySelect.innerHTML = '<option value="">请先选择国家</option>';
+
+            if (!countryCode) return;
+
+            for (const continent of continentsData) {
+                const country = continent.countries.find(c => c.code === countryCode);
+                if (country) {
+                    country.cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city.name_en;
+                        option.textContent = city.name + ' (' + city.name_en + ')';
+                        citySelect.appendChild(option);
+                    });
+                    break;
+                }
+            }
+        }
+
+        // 多城市并发模式 - 加载国家
+        function loadRodConcurrentCountries() {
+            const continentName = document.getElementById('rodConcurrentContinent').value;
+            const countrySelect = document.getElementById('rodConcurrentCountry');
+            const citySelect = document.getElementById('rodConcurrentCity');
+
+            countrySelect.innerHTML = '<option value="">请先选择洲</option>';
+            citySelect.innerHTML = '<option value="">请先选择国家</option>';
+
+            if (!continentName) return;
+
+            const continent = continentsData.find(c => c.name_en === continentName);
+            if (continent) {
+                continent.countries.forEach(country => {
+                    const option = document.createElement('option');
+                    option.value = country.code;
+                    option.textContent = country.name + ' (' + country.name_en + ')';
+                    countrySelect.appendChild(option);
+                });
+            }
+        }
+
+        // 多城市并发模式 - 加载城市（默认全选）
+        function loadRodConcurrentCities() {
+            const countryCode = document.getElementById('rodConcurrentCountry').value;
+            const citySelect = document.getElementById('rodConcurrentCity');
+
+            citySelect.innerHTML = '';
+
+            if (!countryCode) {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '请先选择国家';
+                citySelect.appendChild(defaultOption);
+                return;
+            }
+
+            for (const continent of continentsData) {
+                const country = continent.countries.find(c => c.code === countryCode);
+                if (country) {
+                    country.cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city.name_en;
+                        option.textContent = city.name + ' (' + city.name_en + ')';
+                        option.selected = true; // 默认选中
+                        citySelect.appendChild(option);
+                    });
+                    break;
+                }
+            }
+        }
+
+        // 添加选中城市到列表
+        function addSelectedCity() {
+            const citySelect = document.getElementById('rodConcurrentCity');
+            const selectedOptions = Array.from(citySelect.selectedOptions);
+
+            selectedOptions.forEach(opt => {
+                if (opt.value && !selectedCities.includes(opt.value)) {
+                    if (selectedCities.length >= 10) {
+                        alert('最多只能选择10个城市');
+                        return;
+                    }
+                    selectedCities.push(opt.value);
+                }
+            });
+
+            updateSelectedCitiesList();
+        }
+
+        // 更新已选城市列表显示
+        function updateSelectedCitiesList() {
+            const listDiv = document.getElementById('selectedCitiesList');
+            
+            if (selectedCities.length === 0) {
+                listDiv.innerHTML = '<span style="color:#999;">暂无选中城市</span>';
+                return;
+            }
+
+            let html = '';
+            selectedCities.forEach((city, index) => {
+                html += `<span style="display:inline-block;margin:2px;padding:4px 8px;background:#e8f0fe;color:#1a73e8;border-radius:4px;font-size:12px;">${city} <button onclick="removeSelectedCity(${index})" style="margin-left:4px;border:none;background:none;color:#999;cursor:pointer;">✕</button></span>`;
+            });
+            listDiv.innerHTML = html;
+        }
+
+        // 移除选中的城市
+        function removeSelectedCity(index) {
+            selectedCities.splice(index, 1);
+            updateSelectedCitiesList();
+        }
+
+        // 清空已选城市
+        function clearSelectedCities() {
+            selectedCities = [];
+            updateSelectedCitiesList();
         }
 
         // 搜索
+        // 搜索控制器
+        let abortController = null;
+
         async function doSearch() {
             const btn = document.getElementById('btnSearch');
+            const stopBtn = document.getElementById('btnStop');
+            
             btn.disabled = true;
             btn.textContent = currentMode === 'rod_concurrent' ? '🚀 多城市并发搜索中...' : (currentMode === 'rod' ? '🤖 Rod爬取中（请耐心等待）...' : '🔄 搜索中...');
+            
+            // 显示停止按钮
+            stopBtn.style.display = 'block';
+            
+            // 更新任务状态为进行中
+            updateSearchStatus('running');
+
+            // 创建中止控制器
+            abortController = new AbortController();
 
             clearMarkers();
             businesses = [];
@@ -998,42 +1230,47 @@
                 keyword: keyword,
                 address: address,
                 mode: currentMode,
-                ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
-                ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
+                // AI分析已禁用
+                // ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
+                // ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
             };
 
             if (currentMode === 'rod') {
                 const maxCount = parseInt(document.getElementById('maxCount').value) || 30;
                 reqBody.max_count = maxCount;
-                // Rod模式支持直接输入城市名搜索
-                const rodCity = document.getElementById('rodCityInput').value.trim();
+                // Rod模式使用下拉选择的城市
+                const rodCity = document.getElementById('rodCity').value.trim();
                 if (rodCity) {
                     reqBody.city = rodCity;
                     // 如果有城市名但没手动定位，清零坐标让后端走城市搜索
                     if (!address) reqBody.address = rodCity;
-                }
-            }
-
-            if (currentMode === 'rod_concurrent') {
-                const citiesText = document.getElementById('rodCitiesInput').value.trim();
-                if (!citiesText) {
-                    alert('请输入至少一个城市');
+                } else {
+                    alert('请选择一个城市');
                     btn.disabled = false;
                     btn.innerHTML = '🔍 搜索附近商家';
                     return;
                 }
-                const cities = citiesText.split('\n').map(c => c.trim()).filter(c => c);
-                reqBody.cities = cities;
+            }
+
+            if (currentMode === 'rod_concurrent') {
+                if (selectedCities.length === 0) {
+                    alert('请至少选择一个城市');
+                    btn.disabled = false;
+                    btn.innerHTML = '🔍 搜索附近商家';
+                    return;
+                }
+                reqBody.cities = selectedCities;
                 reqBody.concurrent = parseInt(document.getElementById('concurrentCount').value) || 2;
                 reqBody.max_count = parseInt(document.getElementById('maxCountConcurrent').value) || 30;
-                reqBody.address = cities.join(', ');
+                reqBody.address = selectedCities.join(', ');
             }
 
             try {
                 const resp = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(reqBody)
+                    body: JSON.stringify(reqBody),
+                    signal: abortController.signal
                 });
                 const data = await resp.json();
 
@@ -1063,10 +1300,54 @@
                 // 显示爬取操作栏
                 document.getElementById('scrapeBar').classList.add('show');
             } catch (err) {
-                showToast('搜索失败: ' + err.message, 'error');
+                if (err.name !== 'AbortError') {
+                    showToast('搜索失败: ' + err.message, 'error');
+                }
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🔍 搜索附近商家';
+                // 隐藏停止按钮
+                document.getElementById('btnStop').style.display = 'none';
+                // 重置中止控制器
+                abortController = null;
+                // 更新任务状态为已完成
+                updateSearchStatus('completed');
+            }
+        }
+
+        // 停止搜索任务
+        async function stopSearch() {
+            if (abortController) {
+                // 中止前端请求
+                abortController.abort();
+                
+                // 通知后端停止任务
+                try {
+                    await fetch('/api/search/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                } catch (e) {
+                    console.log('通知后端停止任务:', e);
+                }
+                
+                showToast('⏹️ 任务已停止', 'info');
+            }
+        }
+
+        // 更新搜索任务状态
+        function updateSearchStatus(status) {
+            const statusDiv = document.getElementById('searchStatus');
+            if (status === 'running') {
+                statusDiv.innerHTML = '⏳ 任务进行中...';
+                statusDiv.style.background = '#fff3cd';
+                statusDiv.style.color = '#856404';
+                statusDiv.style.borderColor = '#ffeeba';
+            } else {
+                statusDiv.innerHTML = '✅ 已完成';
+                statusDiv.style.background = '#e8f5e9';
+                statusDiv.style.color = '#155724';
+                statusDiv.style.borderColor = '#c3e6cb';
             }
         }
 
@@ -1107,7 +1388,8 @@
             let html = `<div class="results-header"><span class="count">${businesses.length}</span>&nbsp;个商家</div>`;
             businesses.forEach((biz, i) => {
                 const stars = biz.rating ? '⭐' + biz.rating.toFixed(1) : '';
-                const aiTag = biz.ai_analyzed ? (biz.ai_score >= 60 ? `<span class="scrape-tag" style="background:#e8f5e9;color:#2e7d32;">AI ${biz.ai_score}分</span>` : `<span class="scrape-tag" style="background:#fff3e0;color:#e65100;">AI ${biz.ai_score}分</span>`) : '';
+                // AI分析已禁用
+                // const aiTag = biz.ai_analyzed ? (biz.ai_score >= 60 ? `<span class="scrape-tag" style="background:#e8f5e9;color:#2e7d32;">AI ${biz.ai_score}分</span>` : `<span class="scrape-tag" style="background:#fff3e0;color:#e65100;">AI ${biz.ai_score}分</span>`) : '';
                 // 解析所有邮箱
                 let allEmails = [];
                 if (biz.email) allEmails.push(biz.email);
@@ -1115,8 +1397,8 @@
                 allEmails = [...new Set(allEmails)];
                 html += `
                     <div class="biz-card" id="biz-${i}" onclick="selectBiz(${i})" onmouseenter="highlightMarker(${i})" onmouseleave="unhighlightMarker(${i})">
-                        <div class="biz-name">${escHtml(biz.name)}${biz._scraped ? '<span class="scrape-tag scraped">已爬取</span>' : ''}${biz._filtered ? '<span class="scrape-tag filtered">已过滤</span>' : ''}${!biz.website ? '<span class="scrape-tag no-site">无网站</span>' : ''}${aiTag}</div>
-                        ${biz.company_intro ? `<div style="font-size:12px;color:#1a73e8;margin:2px 0;padding:3px 6px;background:#e8f0fe;border-radius:4px;">📝 ${escHtml(biz.company_intro)}</div>` : ''}
+                        <div class="biz-name">${escHtml(biz.name)}${biz._scraped ? '<span class="scrape-tag scraped">已爬取</span>' : ''}${biz._filtered ? '<span class="scrape-tag filtered">已过滤</span>' : ''}${!biz.website ? '<span class="scrape-tag no-site">无网站</span>' : ''}</div>
+                        <!-- AI分析已禁用 ${biz.company_intro ? `<div style="font-size:12px;color:#1a73e8;margin:2px 0;padding:3px 6px;background:#e8f0fe;border-radius:4px;">📝 ${escHtml(biz.company_intro)}</div>` : ''} -->
                         <div class="biz-addr">${escHtml(biz.formatted_address)}</div>
                         <div class="biz-meta">
                             ${stars ? `<span class="rating">${stars} (${biz.user_ratings_total})</span>` : ''}
@@ -1129,7 +1411,7 @@
                             ${biz.website ? `<button onclick="event.stopPropagation();scrapeSingle(${i})">🕷️爬取</button>` : ''}
                             ${allEmails.length > 0 ? `<button class="btn-email" onclick="event.stopPropagation();openEmailModal(${i})">发邮件</button>` : ''}
                             ${biz.phone ? `<button onclick="event.stopPropagation();window.open('tel:${biz.phone}')">拨打</button>` : ''}
-                            ${biz.ai_analyzed ? `<button onclick="event.stopPropagation();showAIDetail(${i})" style="background:#f3e5f5;color:#7b1fa2;">🤖AI</button>` : ''}
+                            <!-- AI分析已禁用 ${biz.ai_analyzed ? `<button onclick="event.stopPropagation();showAIDetail(${i})" style="background:#f3e5f5;color:#7b1fa2;">🤖AI</button>` : ''} -->
                         </div>
                     </div>`;
             });
@@ -1219,10 +1501,10 @@
                 html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${value}</div></div>`;
             });
 
-            // 公司简介（AI生成）
-            if (biz.company_intro) {
-                html += `<div class="detail-item"><div class="label">📝 公司简介</div><div class="value" style="color:#1a73e8;">${escHtml(biz.company_intro)}</div></div>`;
-            }
+            // 公司简介（AI生成，已禁用）
+            // if (biz.company_intro) {
+            //     html += `<div class="detail-item"><div class="label">📝 公司简介</div><div class="value" style="color:#1a73e8;">${escHtml(biz.company_intro)}</div></div>`;
+            // }
 
             // 所有邮箱展示
             let allEmails = [];
@@ -1262,34 +1544,34 @@
             document.getElementById('detailPanel').classList.remove('show');
         }
 
-        // AI分析详情弹窗
-        function showAIDetail(i) {
-            const biz = businesses[i];
-            let ai = {};
-            try { ai = JSON.parse(biz.ai_analysis || '{}'); } catch (e) { }
-            const panel = document.getElementById('detailPanel');
-            document.getElementById('detailName').textContent = '🤖 AI分析: ' + biz.name;
-            let html = '';
-            const scoreColor = ai.score >= 60 ? '#2e7d32' : ai.score >= 30 ? '#e65100' : '#c62828';
-            html += `<div style="text-align:center;margin:12px 0;"><span style="font-size:36px;font-weight:bold;color:${scoreColor};">${ai.score || 0}</span><span style="color:#666;font-size:14px;">/100 分</span></div>`;
-            if (ai.is_relevant !== undefined) {
-                html += `<div style="text-align:center;margin-bottom:12px;"><span style="padding:4px 12px;border-radius:12px;font-size:13px;${ai.is_relevant ? 'background:#e8f5e9;color:#2e7d32' : 'background:#fbe9e7;color:#c62828'}">${ai.is_relevant ? '✅ 符合要求' : '❌ 不符合要求'}</span></div>`;
-            }
-            const aiItems = [
-                ['公司简介', ai.company_intro],
-                ['主营业务', ai.main_business],
-                ['行业分类', ai.industry],
-                ['目标市场', ai.target_market],
-                ['公司规模', ai.company_size],
-                ['判断理由', ai.reason],
-                ['关键词', ai.keywords ? ai.keywords.join(', ') : '']
-            ];
-            aiItems.forEach(([label, value]) => {
-                if (value) html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${escHtml(value)}</div></div>`;
-            });
-            document.getElementById('detailBody').innerHTML = html;
-            panel.classList.add('show');
-        }
+        // AI分析详情弹窗（已禁用）
+        // function showAIDetail(i) {
+        //     const biz = businesses[i];
+        //     let ai = {};
+        //     try { ai = JSON.parse(biz.ai_analysis || '{}'); } catch (e) { }
+        //     const panel = document.getElementById('detailPanel');
+        //     document.getElementById('detailName').textContent = '🤖 AI分析: ' + biz.name;
+        //     let html = '';
+        //     const scoreColor = ai.score >= 60 ? '#2e7d32' : ai.score >= 30 ? '#e65100' : '#c62828';
+        //     html += `<div style="text-align:center;margin:12px 0;"><span style="font-size:36px;font-weight:bold;color:${scoreColor};">${ai.score || 0}</span><span style="color:#666;font-size:14px;">/100 分</span></div>`;
+        //     if (ai.is_relevant !== undefined) {
+        //         html += `<div style="text-align:center;margin-bottom:12px;"><span style="padding:4px 12px;border-radius:12px;font-size:13px;${ai.is_relevant ? 'background:#e8f5e9;color:#2e7d32' : 'background:#fbe9e7;color:#c62828'}">${ai.is_relevant ? '✅ 符合要求' : '❌ 不符合要求'}</span></div>`;
+        //     }
+        //     const aiItems = [
+        //         ['公司简介', ai.company_intro],
+        //         ['主营业务', ai.main_business],
+        //         ['行业分类', ai.industry],
+        //         ['目标市场', ai.target_market],
+        //         ['公司规模', ai.company_size],
+        //         ['判断理由', ai.reason],
+        //         ['关键词', ai.keywords ? ai.keywords.join(', ') : '']
+        //     ];
+        //     aiItems.forEach(([label, value]) => {
+        //         if (value) html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${escHtml(value)}</div></div>`;
+        //     });
+        //     document.getElementById('detailBody').innerHTML = html;
+        //     panel.classList.add('show');
+        // }
 
         // 邮件弹窗
         function openEmailModal(i) {
@@ -1491,6 +1773,11 @@
                 showToast(`已复制 ${emails.length} 个邮箱到剪贴板`, 'success');
             });
         }
+
+        // 页面加载完成后初始化城市数据
+        document.addEventListener('DOMContentLoaded', () => {
+            initCitiesData();
+        });
     </script>
 
     <script src="https://maps.googleapis.com/maps/api/js?key={{.googleAPIKey}}&libraries=places&callback=initMap" async

@@ -50,7 +50,8 @@ func NewDoubaoService() *DoubaoService {
 }
 
 func (s *DoubaoService) IsEnabled() bool {
-	return s.enabled && s.client != nil
+	// AI智能分析模块已禁用
+	return false
 }
 
 // AnalyzeCompany 分析公司网页内容、生成简介、判断是否符合要求

@@ -109,92 +109,11 @@ func (h *SearchHandler) saveCompanyEmails(companyID uint64, emails []string, sou
 }
 
 // analyzeCompaniesWithAI 用豆包AI分析公司网页内容，低于阈值的公司不入库并从列表中移除
+// AI分析模块已禁用，此函数仅保留代码，不执行实际分析
 func (h *SearchHandler) analyzeCompaniesWithAI(companies []models.Company, requirement string, scoreThreshold int) []models.Company {
-	if !h.doubao.IsEnabled() || requirement == "" {
-		return companies
-	}
-
-	// 默认阈值30分
-	if scoreThreshold <= 0 {
-		scoreThreshold = 30
-	}
-
-	items := make([]services.AnalyzeItem, 0)
-	indexMap := make(map[uint64]int) // companyID -> companies index
-	for i, c := range companies {
-		if c.AIAnalyzed || (c.BodyText == "" && c.Description == "" && c.PageTitle == "") {
-			continue
-		}
-		items = append(items, services.AnalyzeItem{
-			CompanyID:   c.ID,
-			Name:        c.Name,
-			Website:     c.Website,
-			PageTitle:   c.PageTitle,
-			Description: c.Description,
-			BodyText:    c.BodyText,
-		})
-		indexMap[c.ID] = i
-	}
-
-	if len(items) == 0 {
-		return companies
-	}
-
-	results := h.doubao.BatchAnalyze(items, requirement)
-	// 记录不符合要求的公司ID（待删除）
-	deleteIDs := make([]uint64, 0)
-	passedFlags := make(map[int]bool) // companies index -> 是否通过
-
-	for _, r := range results {
-		idx, ok := indexMap[r.CompanyID]
-		if !ok || r.Result == nil {
-			continue
-		}
-
-		// AI评分低于阈值，标记为不符合
-		if r.Result.Score < scoreThreshold {
-			log.Printf("[AI] 公司 %s (ID:%d) 评分 %d 低于阈值 %d，跳过不入库",
-				companies[idx].Name, r.CompanyID, r.Result.Score, scoreThreshold)
-			deleteIDs = append(deleteIDs, r.CompanyID)
-			passedFlags[idx] = false
-			continue
-		}
-
-		// 符合要求，更新AI分析结果
-		passedFlags[idx] = true
-		analysisJSON, _ := json.Marshal(r.Result)
-		companies[idx].CompanyIntro = r.Result.CompanyIntro
-		companies[idx].AIAnalysis = string(analysisJSON)
-		companies[idx].AIScore = r.Result.Score
-		companies[idx].AIAnalyzed = true
-
-		h.db.Model(&models.Company{}).Where("id = ?", r.CompanyID).Updates(map[string]interface{}{
-			"company_intro": r.Result.CompanyIntro,
-			"ai_analysis":   string(analysisJSON),
-			"ai_score":      r.Result.Score,
-			"ai_analyzed":   true,
-		})
-	}
-
-	// 删除不符合要求的公司及其关联邮箱
-	if len(deleteIDs) > 0 {
-		log.Printf("[AI] 共 %d 家公司不符合要求，从数据库中移除", len(deleteIDs))
-		h.db.Where("company_id IN ?", deleteIDs).Delete(&models.CompanyEmail{})
-		h.db.Where("id IN ?", deleteIDs).Delete(&models.Company{})
-	}
-
-	// 从返回列表中过滤掉不符合的公司
-	filtered := make([]models.Company, 0, len(companies))
-	for i, c := range companies {
-		passed, analyzed := passedFlags[i]
-		if analyzed && !passed {
-			continue // 跳过不符合要求的
-		}
-		filtered = append(filtered, c)
-	}
-
-	log.Printf("[AI] 分析完成: 原 %d 家 → 保留 %d 家", len(companies), len(filtered))
-	return filtered
+	// AI智能分析模块已禁用，直接返回原列表
+	log.Printf("[AI] AI分析模块已禁用，跳过分析")
+	return companies
 }
 
 // SearchRequest 搜索请求
@@ -505,6 +424,14 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 }
 
 // SearchNextPage 搜索下一页
+// StopSearch 停止所有正在进行的搜索任务
+func (h *SearchHandler) StopSearch(c *gin.Context) {
+	if h.rodService != nil {
+		h.rodService.Stop()
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已发送停止信号"})
+}
+
 func (h *SearchHandler) SearchNextPage(c *gin.Context) {
 	var req struct {
 		PageToken string `json:"page_token" binding:"required"`
@@ -713,37 +640,10 @@ func (h *SearchHandler) upsertCompany(company *models.Company) {
 	}
 }
 
-// AIAnalyze 手动触发AI分析
+// AIAnalyze 手动触发AI分析（已禁用）
 func (h *SearchHandler) AIAnalyze(c *gin.Context) {
-	var req struct {
-		CompanyIDs  []uint64 `json:"company_ids"`
-		Requirement string   `json:"requirement" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误：requirement 必填"})
-		return
-	}
-	if !h.doubao.IsEnabled() {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "豆包AI未启用，请在 config.json 中配置 doubao.api_key 和 enabled=true"})
-		return
-	}
-
-	query := h.db.Model(&models.Company{})
-	if len(req.CompanyIDs) > 0 {
-		query = query.Where("id IN ?", req.CompanyIDs)
-	}
-	query = query.Where("scrape_success = ?", true)
-
-	var companies []models.Company
-	query.Find(&companies)
-
-	if len(companies) == 0 {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "没有可分析的公司", "data": []interface{}{}})
-		return
-	}
-
-	companies = h.analyzeCompaniesWithAI(companies, req.Requirement, 30)
-	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "分析完成", "data": companies, "total": len(companies)})
+	// AI智能分析模块已禁用
+	c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "AI智能分析模块已禁用"})
 }
 
 // GetCompanyEmails 获取公司的所有邮箱
