@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Map 商家搜索系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a73e8, #4285f4);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header .admin-link {
+            margin-left: auto;
+            color: white;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .header .admin-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 56px);
+        }
+
+        /* 左侧面板 */
+        .panel {
+            width: 420px;
+            background: white;
+            overflow-y: auto;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .search-box {
+            padding: 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-box label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .search-box input,
+        .search-box select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .search-box input:focus {
+            border-color: #4285f4;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-row>div {
+            flex: 1;
+        }
+
+        .radius-group {
+            margin-bottom: 10px;
+        }
+
+        .radius-group .radius-options {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .radius-group .radius-btn {
+            padding: 4px 12px;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .radius-group .radius-btn:hover {
+            border-color: #4285f4;
+            color: #4285f4;
+        }
+
+        .radius-group .radius-btn.active {
+            background: #4285f4;
+            color: white;
+            border-color: #4285f4;
+        }
+
+        .btn-search {
+            width: 100%;
+            padding: 10px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-search:hover {
+            background: #1557b0;
+        }
+
+        .btn-search:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .coord-info {
+            font-size: 11px;
+            color: #999;
+            margin-top: 6px;
+        }
+
+        /* 结果列表 */
+        .results {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .results-header {
+            padding: 12px 16px;
+            background: #fafafa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .results-header .count {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .biz-card {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .biz-card:hover {
+            background: #f8f9fa;
+        }
+
+        .biz-card.active {
+            background: #e8f0fe;
+            border-left: 3px solid #4285f4;
+        }
+
+        .biz-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .biz-addr {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .biz-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .biz-meta span {
+            font-size: 11px;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .biz-meta .rating {
+            color: #f4b400;
+        }
+
+        .biz-meta .has-phone {
+            color: #0d652d;
+        }
+
+        .biz-meta .has-email {
+            color: #1a73e8;
+        }
+
+        .biz-meta .has-web {
+            color: #7b1fa2;
+        }
+
+        .biz-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .biz-actions button {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .biz-actions button:hover {
+            background: #f0f0f0;
+        }
+
+        .biz-actions .btn-email {
+            border-color: #1a73e8;
+            color: #1a73e8;
+        }
+
+        .biz-actions .btn-email:hover {
+            background: #e8f0fe;
+        }
+
+        /* 地图 */
+        .map-area {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal h3 {
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+
+        .modal label {
+            display: block;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 4px;
+            margin-top: 12px;
+        }
+
+        .modal input,
+        .modal textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .modal textarea {
+            height: 120px;
+            resize: vertical;
+        }
+
+        .modal-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .modal-btns button {
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-btns .btn-cancel {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .modal-btns .btn-send {
+            background: #1a73e8;
+            color: white;
+        }
+
+        .modal-btns .btn-send:hover {
+            background: #1557b0;
+        }
+
+        /* 详情面板 */
+        .detail-panel {
+            display: none;
+            position: absolute;
+            right: 16px;
+            top: 16px;
+            width: 360px;
+            max-height: calc(100% - 32px);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .detail-panel.show {
+            display: block;
+        }
+
+        .detail-header {
+            padding: 16px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .detail-header h3 {
+            font-size: 16px;
+        }
+
+        .detail-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .detail-body {
+            padding: 16px;
+        }
+
+        .detail-item {
+            margin-bottom: 12px;
+        }
+
+        .detail-item .label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .detail-item .value {
+            font-size: 14px;
+            color: #333;
+            margin-top: 2px;
+            word-break: break-all;
+        }
+
+        .detail-item .value a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #eee;
+            border-top-color: #4285f4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty svg {
+            width: 64px;
+            height: 64px;
+            fill: #ddd;
+            margin-bottom: 16px;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            z-index: 2000;
+            animation: slideIn 0.3s;
+        }
+
+        .toast.success {
+            background: #0d652d;
+        }
+
+        .toast.error {
+            background: #c5221f;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* 爬取和过滤面板 */
+        .scrape-bar {
+            padding: 10px 16px;
+            background: #fff8e1;
+            border-bottom: 1px solid #ffe082;
+            display: none;
+        }
+
+        .scrape-bar.show {
+            display: block;
+        }
+
+        .scrape-bar .scrape-btns {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .scrape-bar button {
+            padding: 5px 12px;
+            font-size: 12px;
+            border: 1px solid #f9a825;
+            border-radius: 4px;
+            background: #fff;
+            color: #e65100;
+            cursor: pointer;
+        }
+
+        .scrape-bar button:hover {
+            background: #fff8e1;
+        }
+
+        .scrape-bar button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .scrape-bar .scrape-status {
+            font-size: 11px;
+            color: #795548;
+            margin-top: 4px;
+        }
+
+        /* 过滤器面板 */
+        .filter-panel {
+            padding: 12px 16px;
+            background: #f3e5f5;
+            border-bottom: 1px solid #ce93d8;
+            display: none;
+        }
+
+        .filter-panel.show {
+            display: block;
+        }
+
+        .filter-panel h4 {
+            font-size: 13px;
+            color: #6a1b9a;
+            margin-bottom: 8px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+            align-items: center;
+        }
+
+        .filter-row label {
+            font-size: 11px;
+            color: #666;
+            min-width: 70px;
+        }
+
+        .filter-row input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .filter-row input[type="checkbox"] {
+            flex: none;
+            width: auto;
+        }
+
+        .filter-toggle {
+            padding: 6px 16px;
+            font-size: 12px;
+            border: 1px solid #ce93d8;
+            border-radius: 4px;
+            background: white;
+            color: #6a1b9a;
+            cursor: pointer;
+        }
+
+        .filter-toggle:hover {
+            background: #f3e5f5;
+        }
+
+        /* 爬取结果标签 */
+        .scrape-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+
+        .scrape-tag.scraped {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .scrape-tag.filtered {
+            background: #fce4ec;
+            color: #c62828;
+        }
+
+        .scrape-tag.no-site {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        /* 邮件冷却设置 */
+        .cooldown-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .cooldown-row label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .cooldown-row input {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .cooldown-row .hint {
+            font-size: 11px;
+            color: #999;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+            <path
+                d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+        </svg>
+        <h1>Google Map 商家搜索系统</h1>
+        <a href="/admin" class="admin-link">📊 后台管理</a>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <div class="search-box">
+                <label>搜索城市/地点</label>
+                <input type="text" id="cityInput" placeholder="输入城市名或地址，回车搜索定位..." />
+
+                <label>关键词（可选）</label>
+                <input type="text" id="keywordInput" placeholder="如: restaurant, hotel, shop..." />
+
+                <div class="radius-group">
+                    <label>搜索半径</label>
+                    <div class="radius-options">
+                        <button class="radius-btn" data-radius="1000">1km</button>
+                        <button class="radius-btn" data-radius="3000">3km</button>
+                        <button class="radius-btn active" data-radius="5000">5km</button>
+                        <button class="radius-btn" data-radius="10000">10km</button>
+                        <button class="radius-btn" data-radius="20000">20km</button>
+                        <button class="radius-btn" data-radius="50000">50km</button>
+                    </div>
+                </div>
+
+                <!-- 搜索模式切换 -->
+                <div class="mode-switch" style="margin-top:10px;">
+                    <label>数据获取方式</label>
+                    <div class="mode-options" style="display:flex;gap:6px;margin-top:4px;">
+                        <button class="mode-btn active" data-mode="api" onclick="switchMode('api')"
+                            style="flex:1;padding:8px;border:2px solid #1a73e8;background:#e8f0fe;color:#1a73e8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
+                            🔑 Google API<br><span style="font-weight:normal;font-size:10px;color:#666;">需要API
+                                Key</span>
+                        </button>
+                        <button class="mode-btn" data-mode="rod" onclick="switchMode('rod')"
+                            style="flex:1;padding:8px;border:2px solid #ddd;background:white;color:#555;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
+                            🤖 Rod单城市<br><span style="font-weight:normal;font-size:10px;color:#666;">无需Key</span>
+                        </button>
+                        <button class="mode-btn" data-mode="rod_concurrent" onclick="switchMode('rod_concurrent')"
+                            style="flex:1;padding:8px;border:2px solid #ddd;background:white;color:#555;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
+                            🚀 Rod多城市并发<br><span style="font-weight:normal;font-size:10px;color:#666;">同时搜多个城市</span>
+                        </button>
+                    </div>
+                    <div id="rodOptions" style="display:none;margin-top:8px;">
+                        <label>🌍 城市名（可直接输入城市，无需在地图定位）</label>
+                        <input type="text" id="rodCityInput" placeholder="如: New York, Tokyo, London, Paris..."
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;" />
+                        <div style="font-size:11px;color:#1a73e8;margin-bottom:8px;">
+                            💡 Rod模式下可直接输入城市名搜索，系统会自动解析位置，无需手动定位坐标
+                        </div>
+                        <label>最大获取数量</label>
+                        <input type="number" id="maxCount" value="30" min="5" max="200"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
+                        <div
+                            style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:8px;margin-top:6px;font-size:11px;color:#856404;">
+                            ⚠️ Rod模式需要：<br>
+                            · 本地网络可访问 Google（或在 config.json 配置代理）<br>
+                            · 首次运行会自动下载 Chromium<br>
+                            · 速度较慢，每个商家约需2-3秒
+                        </div>
+                    </div>
+                    <div id="rodConcurrentOptions" style="display:none;margin-top:8px;">
+                        <label>🌍 搜索城市（每行一个城市，同时并发搜索）</label>
+                        <textarea id="rodCitiesInput" rows="4"
+                            placeholder="每行输入一个城市，例如：&#10;New York&#10;Los Angeles&#10;Chicago&#10;Houston"
+                            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:6px;resize:vertical;"></textarea>
+                        <div style="display:flex;gap:8px;margin-bottom:6px;">
+                            <div style="flex:1;">
+                                <label style="font-size:12px;">并发数（同时搜索几个城市）</label>
+                                <input type="number" id="concurrentCount" value="2" min="1" max="5"
+                                    style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:12px;">每城市最大商家数</label>
+                                <input type="number" id="maxCountConcurrent" value="30" min="5" max="200"
+                                    style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+                            <span style="font-size:11px;color:#666;">快捷填充：</span>
+                            <button onclick="fillCities('us')"
+                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🇺🇸
+                                美国主要城市</button>
+                            <button onclick="fillCities('eu')"
+                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🇪🇺
+                                欧洲主要城市</button>
+                            <button onclick="fillCities('asia')"
+                                style="font-size:10px;padding:2px 8px;border:1px solid #ddd;border-radius:4px;background:white;cursor:pointer;">🌏
+                                亚洲主要城市</button>
+                        </div>
+                        <div
+                            style="background:#d4edda;border:1px solid #28a745;border-radius:6px;padding:8px;margin-top:6px;font-size:11px;color:#155724;">
+                            🚀 并发模式同时启动多个浏览器，速度翻倍！<br>
+                            · 建议并发数 2-3，过高可能导致内存不足<br>
+                            · 最多支持同时搜索 10 个城市
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI分析设置 -->
+                <div
+                    style="margin-top:12px;padding:10px;background:#f0f7ff;border:1px solid #b3d4fc;border-radius:8px;">
+                    <label style="font-weight:600;color:#1a73e8;">🤖 AI智能分析（豆包 Doubao）</label>
+                    <input type="text" id="aiRequirement" placeholder="输入筛选要求，如：找做外贸的公司、找餐饮加盟商..."
+                        style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-top:6px;" />
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                        <label style="font-size:12px;color:#555;white-space:nowrap;">匹配阈值：</label>
+                        <input type="range" id="aiScoreThreshold" min="0" max="100" value="30" style="flex:1;"
+                            oninput="document.getElementById('thresholdVal').textContent=this.value" />
+                        <span id="thresholdVal"
+                            style="font-size:13px;font-weight:600;color:#1a73e8;min-width:28px;">30</span>
+                        <span style="font-size:11px;color:#888;">分</span>
+                    </div>
+                    <div style="font-size:11px;color:#666;margin-top:4px;">
+                        💡 AI分析每个公司网页，评分低于阈值的公司将被过滤不入库（0=不过滤全部保留）
+                    </div>
+                </div>
+
+                <button class="btn-search" id="btnSearch" onclick="doSearch()">🔍 搜索附近商家</button>
+                <div class="coord-info" id="coordInfo">📍 拖动地图或点击设置搜索中心 | 当前: --</div>
+            </div>
+
+            <!-- 过滤器面板 -->
+            <div class="filter-panel" id="filterPanel">
+                <h4>🔍 过滤器设置</h4>
+                <div class="filter-row">
+                    <label>包含关键词</label>
+                    <input type="text" id="filterInclude" placeholder="多个用逗号分隔" />
+                </div>
+                <div class="filter-row">
+                    <label>排除关键词</label>
+                    <input type="text" id="filterExclude" placeholder="多个用逗号分隔" />
+                </div>
+                <div class="filter-row">
+                    <label>最低评分</label>
+                    <input type="number" id="filterMinRating" placeholder="0" min="0" max="5" step="0.1"
+                        style="width:80px" />
+                    <label style="min-width:auto">最少评价</label>
+                    <input type="number" id="filterMinReviews" placeholder="0" min="0" style="width:80px" />
+                </div>
+                <div class="filter-row">
+                    <label>排除域名</label>
+                    <input type="text" id="filterExcludeDomains" placeholder=".gov, .edu" />
+                </div>
+                <div class="filter-row">
+                    <input type="checkbox" id="filterRequireEmail" /> <label style="min-width:auto">必须有邮箱</label>
+                    <input type="checkbox" id="filterRequirePhone" /> <label style="min-width:auto">必须有电话</label>
+                    <input type="checkbox" id="filterRequireWebsite" /> <label style="min-width:auto">必须有网站</label>
+                </div>
+            </div>
+
+            <!-- 爬取操作栏 -->
+            <div class="scrape-bar" id="scrapeBar">
+                <div class="scrape-btns">
+                    <button onclick="toggleFilterPanel()" class="filter-toggle">⚙️ 过滤器</button>
+                    <button id="btnScrapeAll" onclick="scrapeAll()">🕷️ 爬取全部网站</button>
+                    <button id="btnScrapeFiltered" onclick="scrapeFiltered()">🕷️ 爬取并过滤</button>
+                    <button onclick="exportEmails()">📋 导出邮箱</button>
+                </div>
+                <div class="scrape-status" id="scrapeStatus"></div>
+            </div>
+
+            <div class="results" id="resultsList">
+                <div class="empty">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                    </svg>
+                    <p>在地图上选择位置或搜索城市<br>开始查找附近商家</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-area">
+            <div id="map"></div>
+
+            <div class="detail-panel" id="detailPanel">
+                <div class="detail-header">
+                    <h3 id="detailName">商家详情</h3>
+                    <button class="detail-close" onclick="closeDetail()">✕</button>
+                </div>
+                <div class="detail-body" id="detailBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 邮件弹窗 -->
+    <div class="modal-overlay" id="emailModal">
+        <div class="modal">
+            <h3>✉️ 发送邮件</h3>
+            <label>收件人</label>
+            <input type="email" id="emailTo" placeholder="收件邮箱" />
+            <label>主题</label>
+            <input type="text" id="emailSubject" placeholder="邮件主题" />
+            <label>内容</label>
+            <textarea id="emailBody" placeholder="邮件正文（支持HTML）"></textarea>
+            <div class="cooldown-row">
+                <label>发送间隔</label>
+                <input type="number" id="emailCooldown" value="60" min="0" />
+                <span class="hint">分钟（0=不限制，同一邮箱在此时间内只发一封）</span>
+            </div>
+            <input type="hidden" id="emailBizId" />
+            <div class="modal-btns">
+                <button class="btn-cancel" onclick="closeEmailModal()">取消</button>
+                <button class="btn-send" onclick="sendEmail()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map, searchCenter = { lat: 39.9042, lng: 116.4074 }, radiusCircle, markers = [], infoWindow;
+        let currentRadius = 5000;
+        let businesses = [];
+        let nextPageToken = '';
+        let currentRecordId = 0;
+        let mapLoaded = false;
+
+        // 初始化地图
+        function initMap() {
+            searchCenter = { lat: 39.9042, lng: 116.4074 }; // 默认北京
+            mapLoaded = true;
+
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 13,
+                center: searchCenter,
+                mapTypeControl: true,
+                streetViewControl: false,
+                styles: [
+                    { featureType: 'poi', stylers: [{ visibility: 'simplified' }] }
+                ]
+            });
+
+            infoWindow = new google.maps.InfoWindow();
+
+            // 画半径圆
+            radiusCircle = new google.maps.Circle({
+                map: map,
+                center: searchCenter,
+                radius: currentRadius,
+                fillColor: '#4285f4',
+                fillOpacity: 0.08,
+                strokeColor: '#4285f4',
+                strokeOpacity: 0.3,
+                strokeWeight: 2
+            });
+
+            // 点击地图移动搜索中心
+            map.addListener('click', (e) => {
+                setSearchCenter(e.latLng.lat(), e.latLng.lng());
+            });
+
+            // 拖动结束更新中心
+            map.addListener('dragend', () => {
+                const c = map.getCenter();
+                setSearchCenter(c.lat(), c.lng());
+            });
+
+            updateCoordInfo();
+
+            // 城市搜索自动完成
+            const input = document.getElementById('cityInput');
+            const autocomplete = new google.maps.places.Autocomplete(input, { types: ['(cities)'] });
+            autocomplete.bindTo('bounds', map);
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                if (place.geometry) {
+                    const loc = place.geometry.location;
+                    setSearchCenter(loc.lat(), loc.lng());
+                    map.setCenter(loc);
+                    map.setZoom(13);
+                }
+            });
+        }
+
+        function setSearchCenter(lat, lng) {
+            searchCenter = { lat, lng };
+            if (radiusCircle) radiusCircle.setCenter(searchCenter);
+            updateCoordInfo();
+        }
+
+        function updateCoordInfo() {
+            document.getElementById('coordInfo').textContent =
+                `📍 当前中心: ${searchCenter.lat.toFixed(5)}, ${searchCenter.lng.toFixed(5)} | 半径: ${currentRadius / 1000}km`;
+        }
+
+        // 半径选择
+        document.querySelectorAll('.radius-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.radius-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentRadius = parseInt(btn.dataset.radius);
+                radiusCircle.setRadius(currentRadius);
+                updateCoordInfo();
+            });
+        });
+
+        // 搜索模式
+        let currentMode = 'api';
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                if (btn.dataset.mode === mode) {
+                    btn.classList.add('active');
+                    btn.style.border = '2px solid #1a73e8';
+                    btn.style.background = '#e8f0fe';
+                    btn.style.color = '#1a73e8';
+                } else {
+                    btn.classList.remove('active');
+                    btn.style.border = '2px solid #ddd';
+                    btn.style.background = 'white';
+                    btn.style.color = '#555';
+                }
+            });
+            document.getElementById('rodOptions').style.display = (mode === 'rod') ? 'block' : 'none';
+            document.getElementById('rodConcurrentOptions').style.display = (mode === 'rod_concurrent') ? 'block' : 'none';
+        }
+
+        // 快捷填充城市
+        function fillCities(region) {
+            const cities = {
+                us: 'New York\nLos Angeles\nChicago\nHouston\nPhoenix\nPhiladelphia\nSan Antonio\nSan Diego\nDallas\nSan Jose',
+                eu: 'London\nParis\nBerlin\nMadrid\nRome\nAmsterdam\nVienna\nBrussels\nBarcelona\nMunich',
+                asia: 'Tokyo\nSeoul\nBangkok\nSingapore\nKuala Lumpur\nJakarta\nManila\nHo Chi Minh City\nDubai\nMumbai'
+            };
+            document.getElementById('rodCitiesInput').value = cities[region] || '';
+        }
+
+        // 搜索
+        async function doSearch() {
+            const btn = document.getElementById('btnSearch');
+            btn.disabled = true;
+            btn.textContent = currentMode === 'rod_concurrent' ? '🚀 多城市并发搜索中...' : (currentMode === 'rod' ? '🤖 Rod爬取中（请耐心等待）...' : '🔄 搜索中...');
+
+            clearMarkers();
+            businesses = [];
+
+            const keyword = document.getElementById('keywordInput').value.trim();
+            const address = document.getElementById('cityInput').value.trim();
+
+            const reqBody = {
+                latitude: searchCenter ? searchCenter.lat : 0,
+                longitude: searchCenter ? searchCenter.lng : 0,
+                radius: currentRadius,
+                keyword: keyword,
+                address: address,
+                mode: currentMode,
+                ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
+                ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
+            };
+
+            if (currentMode === 'rod') {
+                const maxCount = parseInt(document.getElementById('maxCount').value) || 30;
+                reqBody.max_count = maxCount;
+                // Rod模式支持直接输入城市名搜索
+                const rodCity = document.getElementById('rodCityInput').value.trim();
+                if (rodCity) {
+                    reqBody.city = rodCity;
+                    // 如果有城市名但没手动定位，清零坐标让后端走城市搜索
+                    if (!address) reqBody.address = rodCity;
+                }
+            }
+
+            if (currentMode === 'rod_concurrent') {
+                const citiesText = document.getElementById('rodCitiesInput').value.trim();
+                if (!citiesText) {
+                    alert('请输入至少一个城市');
+                    btn.disabled = false;
+                    btn.innerHTML = '🔍 搜索附近商家';
+                    return;
+                }
+                const cities = citiesText.split('\n').map(c => c.trim()).filter(c => c);
+                reqBody.cities = cities;
+                reqBody.concurrent = parseInt(document.getElementById('concurrentCount').value) || 2;
+                reqBody.max_count = parseInt(document.getElementById('maxCountConcurrent').value) || 30;
+                reqBody.address = cities.join(', ');
+            }
+
+            try {
+                const resp = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody)
+                });
+                const data = await resp.json();
+
+                if (data.code !== 0) {
+                    showToast(data.msg, 'error');
+                    return;
+                }
+
+                businesses = data.data.companies || data.data.businesses || [];
+                nextPageToken = data.data.next_page_token || '';
+                currentRecordId = data.data.record?.id || 0;
+
+                const modeLabels = { 'rod': '（Rod爬取）', 'rod_concurrent': '（Rod多城市并发）', 'api': '（Google API）' };
+                const modeLabel = modeLabels[data.data.mode] || '';
+
+                // 并发模式显示每个城市的结果摘要
+                if (data.data.city_results) {
+                    const cityInfo = data.data.city_results.map(r =>
+                        `${r.city}: ${r.error ? '❌' + r.error : '✅' + r.total + '家'} (${r.duration})`
+                    ).join('\n');
+                    console.log('各城市搜索结果:\n' + cityInfo);
+                }
+
+                renderResults();
+                addMarkers();
+                showToast(`${modeLabel} 找到 ${businesses.length} 个商家`, 'success');
+                // 显示爬取操作栏
+                document.getElementById('scrapeBar').classList.add('show');
+            } catch (err) {
+                showToast('搜索失败: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 搜索附近商家';
+            }
+        }
+
+        // 加载更多
+        async function loadMore() {
+            if (!nextPageToken) return;
+
+            try {
+                const resp = await fetch('/api/search/next', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page_token: nextPageToken,
+                        search_record_id: currentRecordId
+                    })
+                });
+                const data = await resp.json();
+                if (data.code === 0) {
+                    const newBiz = data.data.businesses || [];
+                    businesses = businesses.concat(newBiz);
+                    nextPageToken = data.data.next_page_token || '';
+                    renderResults();
+                    addMarkers();
+                }
+            } catch (err) {
+                showToast('加载更多失败', 'error');
+            }
+        }
+
+        // 渲染结果列表
+        function renderResults() {
+            const container = document.getElementById('resultsList');
+            if (businesses.length === 0) {
+                container.innerHTML = '<div class="empty"><p>未找到商家，尝试扩大搜索半径</p></div>';
+                return;
+            }
+
+            let html = `<div class="results-header"><span class="count">${businesses.length}</span>&nbsp;个商家</div>`;
+            businesses.forEach((biz, i) => {
+                const stars = biz.rating ? '⭐' + biz.rating.toFixed(1) : '';
+                const aiTag = biz.ai_analyzed ? (biz.ai_score >= 60 ? `<span class="scrape-tag" style="background:#e8f5e9;color:#2e7d32;">AI ${biz.ai_score}分</span>` : `<span class="scrape-tag" style="background:#fff3e0;color:#e65100;">AI ${biz.ai_score}分</span>`) : '';
+                // 解析所有邮箱
+                let allEmails = [];
+                if (biz.email) allEmails.push(biz.email);
+                try { if (biz.scraped_emails) { const se = JSON.parse(biz.scraped_emails); allEmails = allEmails.concat(se); } } catch (e) { }
+                allEmails = [...new Set(allEmails)];
+                html += `
+                    <div class="biz-card" id="biz-${i}" onclick="selectBiz(${i})" onmouseenter="highlightMarker(${i})" onmouseleave="unhighlightMarker(${i})">
+                        <div class="biz-name">${escHtml(biz.name)}${biz._scraped ? '<span class="scrape-tag scraped">已爬取</span>' : ''}${biz._filtered ? '<span class="scrape-tag filtered">已过滤</span>' : ''}${!biz.website ? '<span class="scrape-tag no-site">无网站</span>' : ''}${aiTag}</div>
+                        ${biz.company_intro ? `<div style="font-size:12px;color:#1a73e8;margin:2px 0;padding:3px 6px;background:#e8f0fe;border-radius:4px;">📝 ${escHtml(biz.company_intro)}</div>` : ''}
+                        <div class="biz-addr">${escHtml(biz.formatted_address)}</div>
+                        <div class="biz-meta">
+                            ${stars ? `<span class="rating">${stars} (${biz.user_ratings_total})</span>` : ''}
+                            ${biz.phone ? '<span class="has-phone">📞 ' + escHtml(biz.phone) + '</span>' : ''}
+                            ${allEmails.length > 0 ? allEmails.map(e => '<span class="has-email">✉️ ' + escHtml(e) + '</span>').join('') : ''}
+                            ${biz.website ? '<span class="has-web">🌐 网站</span>' : ''}
+                        </div>
+                        <div class="biz-actions">
+                            <button onclick="event.stopPropagation();showDetail(${i})">详情</button>
+                            ${biz.website ? `<button onclick="event.stopPropagation();scrapeSingle(${i})">🕷️爬取</button>` : ''}
+                            ${allEmails.length > 0 ? `<button class="btn-email" onclick="event.stopPropagation();openEmailModal(${i})">发邮件</button>` : ''}
+                            ${biz.phone ? `<button onclick="event.stopPropagation();window.open('tel:${biz.phone}')">拨打</button>` : ''}
+                            ${biz.ai_analyzed ? `<button onclick="event.stopPropagation();showAIDetail(${i})" style="background:#f3e5f5;color:#7b1fa2;">🤖AI</button>` : ''}
+                        </div>
+                    </div>`;
+            });
+
+            if (nextPageToken) {
+                html += `<div style="padding:16px;text-align:center"><button class="btn-search" style="width:auto;padding:8px 24px" onclick="loadMore()">加载更多</button></div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // 地图标记
+        function addMarkers() {
+            clearMarkers();
+            if (!mapLoaded || !map) return; // 地图未加载则跳过
+            const bounds = new google.maps.LatLngBounds();
+
+            businesses.forEach((biz, i) => {
+                if (!biz.latitude || !biz.longitude) return;
+                const marker = new google.maps.Marker({
+                    position: { lat: biz.latitude, lng: biz.longitude },
+                    map: map,
+                    title: biz.name,
+                    label: { text: String(i + 1), color: 'white', fontSize: '11px' },
+                    animation: google.maps.Animation.DROP
+                });
+
+                marker.addListener('click', () => {
+                    selectBiz(i);
+                    infoWindow.setContent(`<div style="max-width:200px"><b>${escHtml(biz.name)}</b><br><small>${escHtml(biz.formatted_address)}</small></div>`);
+                    infoWindow.open(map, marker);
+                });
+
+                markers.push(marker);
+                bounds.extend(marker.getPosition());
+            });
+
+            if (markers.length > 0) {
+                map.fitBounds(bounds);
+            }
+        }
+
+        function clearMarkers() {
+            markers.forEach(m => { if (m && m.setMap) m.setMap(null); });
+            markers = [];
+        }
+
+        function highlightMarker(i) {
+            if (markers[i] && google && google.maps) markers[i].setAnimation(google.maps.Animation.BOUNCE);
+        }
+        function unhighlightMarker(i) {
+            if (markers[i] && google && google.maps) markers[i].setAnimation(null);
+        }
+
+        function selectBiz(i) {
+            document.querySelectorAll('.biz-card').forEach(c => c.classList.remove('active'));
+            const card = document.getElementById('biz-' + i);
+            if (card) card.classList.add('active');
+
+            const biz = businesses[i];
+            if (biz.latitude && biz.longitude) {
+                map.panTo({ lat: biz.latitude, lng: biz.longitude });
+                map.setZoom(16);
+            }
+            showDetail(i);
+        }
+
+        // 详情面板
+        function showDetail(i) {
+            const biz = businesses[i];
+            const panel = document.getElementById('detailPanel');
+            document.getElementById('detailName').textContent = biz.name;
+
+            let html = '';
+            const items = [
+                ['地址', biz.formatted_address],
+                ['电话', biz.phone || biz.international_phone || '-'],
+                ['邮箱', biz.email || '-'],
+                ['网站', biz.website ? `<a href="${escHtml(biz.website)}" target="_blank">${escHtml(biz.website)}</a>` : '-'],
+                ['评分', biz.rating ? `⭐ ${biz.rating} (${biz.user_ratings_total} 评价)` : '-'],
+                ['类型', biz.types || '-'],
+                ['营业状态', biz.business_status || '-'],
+                ['坐标', `${biz.latitude}, ${biz.longitude}`]
+            ];
+
+            items.forEach(([label, value]) => {
+                html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+            });
+
+            // 公司简介（AI生成）
+            if (biz.company_intro) {
+                html += `<div class="detail-item"><div class="label">📝 公司简介</div><div class="value" style="color:#1a73e8;">${escHtml(biz.company_intro)}</div></div>`;
+            }
+
+            // 所有邮箱展示
+            let allEmails = [];
+            if (biz.email) allEmails.push(biz.email);
+            try { if (biz.scraped_emails) { const se = JSON.parse(biz.scraped_emails); allEmails = allEmails.concat(se); } } catch (e) { }
+            allEmails = [...new Set(allEmails)];
+            if (allEmails.length > 1) {
+                html += `<div class="detail-item"><div class="label">📧 全部邮箱 (${allEmails.length})</div><div class="value">${allEmails.map(e => '<a href="mailto:' + escHtml(e) + '">' + escHtml(e) + '</a>').join('<br>')}</div></div>`;
+            }
+
+            if (biz.email) {
+                html += `<button class="btn-search" style="margin-top:12px" onclick="openEmailModal(${i})">✉️ 发送邮件</button>`;
+            }
+
+            // 爬取数据展示
+            if (biz._scrapeData) {
+                const sd = biz._scrapeData;
+                html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee">`;
+                html += `<div class="detail-item"><div class="label">🕷️ 爬取数据</div></div>`;
+                if (sd.title) html += `<div class="detail-item"><div class="label">网站标题</div><div class="value">${escHtml(sd.title)}</div></div>`;
+                if (sd.description) html += `<div class="detail-item"><div class="label">描述</div><div class="value">${escHtml(sd.description)}</div></div>`;
+                if (sd.emails && sd.emails.length) html += `<div class="detail-item"><div class="label">发现邮箱</div><div class="value">${sd.emails.map(e => '<a href="mailto:' + escHtml(e) + '">' + escHtml(e) + '</a>').join('<br>')}</div></div>`;
+                if (sd.phones && sd.phones.length) html += `<div class="detail-item"><div class="label">发现电话</div><div class="value">${sd.phones.map(p => escHtml(p)).join('<br>')}</div></div>`;
+                if (sd.social_links && sd.social_links.length) html += `<div class="detail-item"><div class="label">社交链接</div><div class="value">${sd.social_links.map(l => '<a href="' + escHtml(l) + '" target="_blank">' + escHtml(l) + '</a>').join('<br>')}</div></div>`;
+                html += `</div>`;
+            }
+
+            if (biz.website && !biz._scraped) {
+                html += `<button class="btn-search" style="margin-top:8px;background:#e65100" onclick="scrapeSingle(${i})">🕷️ 爬取网站信息</button>`;
+            }
+
+            document.getElementById('detailBody').innerHTML = html;
+            panel.classList.add('show');
+        }
+
+        function closeDetail() {
+            document.getElementById('detailPanel').classList.remove('show');
+        }
+
+        // AI分析详情弹窗
+        function showAIDetail(i) {
+            const biz = businesses[i];
+            let ai = {};
+            try { ai = JSON.parse(biz.ai_analysis || '{}'); } catch (e) { }
+            const panel = document.getElementById('detailPanel');
+            document.getElementById('detailName').textContent = '🤖 AI分析: ' + biz.name;
+            let html = '';
+            const scoreColor = ai.score >= 60 ? '#2e7d32' : ai.score >= 30 ? '#e65100' : '#c62828';
+            html += `<div style="text-align:center;margin:12px 0;"><span style="font-size:36px;font-weight:bold;color:${scoreColor};">${ai.score || 0}</span><span style="color:#666;font-size:14px;">/100 分</span></div>`;
+            if (ai.is_relevant !== undefined) {
+                html += `<div style="text-align:center;margin-bottom:12px;"><span style="padding:4px 12px;border-radius:12px;font-size:13px;${ai.is_relevant ? 'background:#e8f5e9;color:#2e7d32' : 'background:#fbe9e7;color:#c62828'}">${ai.is_relevant ? '✅ 符合要求' : '❌ 不符合要求'}</span></div>`;
+            }
+            const aiItems = [
+                ['公司简介', ai.company_intro],
+                ['主营业务', ai.main_business],
+                ['行业分类', ai.industry],
+                ['目标市场', ai.target_market],
+                ['公司规模', ai.company_size],
+                ['判断理由', ai.reason],
+                ['关键词', ai.keywords ? ai.keywords.join(', ') : '']
+            ];
+            aiItems.forEach(([label, value]) => {
+                if (value) html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${escHtml(value)}</div></div>`;
+            });
+            document.getElementById('detailBody').innerHTML = html;
+            panel.classList.add('show');
+        }
+
+        // 邮件弹窗
+        function openEmailModal(i) {
+            const biz = businesses[i];
+            document.getElementById('emailTo').value = biz.email || '';
+            document.getElementById('emailSubject').value = '';
+            document.getElementById('emailBody').value = '';
+            document.getElementById('emailBizId').value = biz.id;
+            document.getElementById('emailModal').classList.add('show');
+        }
+
+        function closeEmailModal() {
+            document.getElementById('emailModal').classList.remove('show');
+        }
+
+        async function sendEmail() {
+            const bizId = parseInt(document.getElementById('emailBizId').value);
+            const toEmail = document.getElementById('emailTo').value.trim();
+            const subject = document.getElementById('emailSubject').value.trim();
+            const body = document.getElementById('emailBody').value.trim();
+            const cooldown = parseInt(document.getElementById('emailCooldown').value) || 0;
+
+            if (!toEmail || !subject || !body) {
+                showToast('请填写完整信息', 'error');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/email/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ business_id: bizId, to_email: toEmail, subject, body, cooldown_minutes: cooldown })
+                });
+                const data = await resp.json();
+                if (data.code === 0) {
+                    showToast('邮件发送成功', 'success');
+                    closeEmailModal();
+                } else {
+                    showToast(data.msg, 'error');
+                }
+            } catch (err) {
+                showToast('发送失败: ' + err.message, 'error');
+            }
+        }
+
+        // 工具函数
+        function escHtml(s) {
+            if (!s) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function showToast(msg, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // ===== 过滤器 =====
+        function toggleFilterPanel() {
+            document.getElementById('filterPanel').classList.toggle('show');
+        }
+
+        function getFilterConfig() {
+            const include = document.getElementById('filterInclude').value.trim();
+            const exclude = document.getElementById('filterExclude').value.trim();
+            const minRating = parseFloat(document.getElementById('filterMinRating').value) || 0;
+            const minReviews = parseInt(document.getElementById('filterMinReviews').value) || 0;
+            const excludeDomains = document.getElementById('filterExcludeDomains').value.trim();
+
+            return {
+                include_keywords: include ? include.split(',').map(s => s.trim()).filter(Boolean) : [],
+                exclude_keywords: exclude ? exclude.split(',').map(s => s.trim()).filter(Boolean) : [],
+                min_rating: minRating,
+                min_reviews: minReviews,
+                exclude_domains: excludeDomains ? excludeDomains.split(',').map(s => s.trim()).filter(Boolean) : [],
+                require_email: document.getElementById('filterRequireEmail').checked,
+                require_phone: document.getElementById('filterRequirePhone').checked,
+                require_website: document.getElementById('filterRequireWebsite').checked,
+            };
+        }
+
+        // ===== 爬取 =====
+        async function scrapeSingle(i) {
+            const biz = businesses[i];
+            if (!biz.website) { showToast('该商家没有网站', 'error'); return; }
+
+            showToast('正在爬取 ' + biz.name + ' ...', 'success');
+            try {
+                const resp = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ business_id: biz.id, url: biz.website })
+                });
+                const data = await resp.json();
+                if (data.code === 0) {
+                    const page = data.data.page;
+                    biz._scraped = true;
+
+                    // 更新邮箱
+                    if (page.emails && page.emails.length > 0 && !biz.email) {
+                        biz.email = page.emails[0];
+                    }
+                    // 补充爬取到的额外信息
+                    biz._scrapeData = page;
+
+                    renderResults();
+                    showToast(`爬取完成: ${page.emails?.length || 0}邮箱, ${page.phones?.length || 0}电话, ${page.social_links?.length || 0}社交链接`, 'success');
+                } else {
+                    showToast(data.msg, 'error');
+                }
+            } catch (err) {
+                showToast('爬取失败: ' + err.message, 'error');
+            }
+        }
+
+        async function scrapeAll() {
+            const ids = businesses.filter(b => b.website).map(b => b.id);
+            if (ids.length === 0) { showToast('没有有网站的商家', 'error'); return; }
+            await doBatchScrape(ids, null);
+        }
+
+        async function scrapeFiltered() {
+            const ids = businesses.filter(b => b.website).map(b => b.id);
+            if (ids.length === 0) { showToast('没有有网站的商家', 'error'); return; }
+            await doBatchScrape(ids, getFilterConfig());
+        }
+
+        async function doBatchScrape(ids, filter) {
+            const btn1 = document.getElementById('btnScrapeAll');
+            const btn2 = document.getElementById('btnScrapeFiltered');
+            btn1.disabled = btn2.disabled = true;
+            const statusEl = document.getElementById('scrapeStatus');
+            statusEl.textContent = `正在爬取 ${ids.length} 个网站，请稍候...`;
+
+            try {
+                const resp = await fetch('/api/scrape/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ business_ids: ids, filter: filter })
+                });
+                const data = await resp.json();
+                if (data.code === 0) {
+                    const results = data.data.results || [];
+                    // 更新businesses状态
+                    results.forEach(r => {
+                        const biz = businesses.find(b => b.id === r.business_id);
+                        if (biz) {
+                            biz._scraped = !r.filtered;
+                            biz._filtered = r.filtered;
+                            biz._filterReason = r.filter_reason;
+                            if (r.page && r.page.emails && r.page.emails.length > 0 && !biz.email) {
+                                biz.email = r.page.emails[0];
+                            }
+                            if (r.page) biz._scrapeData = r.page;
+                        }
+                    });
+                    renderResults();
+                    statusEl.textContent = `完成: 爬取${data.data.scraped}个, 过滤${data.data.filtered_count}个`;
+                    showToast('批量爬取完成', 'success');
+                } else {
+                    showToast(data.msg, 'error');
+                    statusEl.textContent = '爬取失败';
+                }
+            } catch (err) {
+                showToast('爬取失败: ' + err.message, 'error');
+                statusEl.textContent = '爬取出错';
+            } finally {
+                btn1.disabled = btn2.disabled = false;
+            }
+        }
+
+        function exportEmails() {
+            const emails = [];
+            businesses.forEach(b => {
+                if (b.email) emails.push(b.email);
+                if (b._scrapeData && b._scrapeData.emails) {
+                    b._scrapeData.emails.forEach(e => {
+                        if (!emails.includes(e)) emails.push(e);
+                    });
+                }
+            });
+            if (emails.length === 0) { showToast('暂无邮箱数据', 'error'); return; }
+
+            const text = emails.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`已复制 ${emails.length} 个邮箱到剪贴板`, 'success');
+            }).catch(() => {
+                // fallback
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showToast(`已复制 ${emails.length} 个邮箱到剪贴板`, 'success');
+            });
+        }
+    </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key={{.googleAPIKey}}&libraries=places&callback=initMap" async
+        defer
+        onerror="console.warn('Google Maps 加载失败，Rod模式仍可正常使用'); document.getElementById('map').innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;color:#999;flex-direction:column\'><p style=\'font-size:48px;margin:0\'>🗺️</p><p>Google Maps 未加载</p><p style=\'font-size:12px\'>请使用 Rod 爬取模式搜索</p></div>';"></script>
+</body>
+
+</html>

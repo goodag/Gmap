@@ -1,0 +1,34 @@
+{
+    "server": {
+        "port": "8088"
+    },
+    "database": {
+        "host": "38.190.208.129",
+        "port": "3306",
+        "user": "root",
+        "password": "qazWSXedc~123+-=",
+        "dbname": "google_search_company"
+    },
+    "google": {
+        "api_key": "YOUR_GOOGLE_MAPS_API_KEY",
+        "custom_search_id": "YOUR_CUSTOM_SEARCH_ENGINE_ID"
+    },
+    "email": {
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "username": "your-email@gmail.com",
+        "password": "your-app-password",
+        "from_name": "商家搜索系统"
+    },
+    "proxy": {
+        "enabled": true,
+        "address": "",
+        "chrome_path": ""
+    },
+    "doubao": {
+        "api_key": "7d3c9f66-8827-4bc7-b33a-af910c7ede46",
+        "model_id": "Doubao-Seed-2.0-lite",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "enabled": false
+    }
+}

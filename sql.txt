@@ -1,0 +1,123 @@
+## 本地mysql启动命令
+	G:/mysql/bin/mysqld.exe --defaults-file=G:/mysql/my.ini
+	
+	
+	G:/mysql/bin/mysql.exe -u root -pRoot2026abc -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS google_search_company DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; SHOW DATABASES;" 2>&1
+
+-- Google Map 商家搜索系统 数据库建表语句
+-- 数据库: google_search_company
+
+CREATE DATABASE IF NOT EXISTS google_search_company DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE google_search_company;
+
+-- 搜索记录表（地图搜索/谷歌搜索共用）
+CREATE TABLE IF NOT EXISTS search_records (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    source VARCHAR(20) NOT NULL DEFAULT 'map' COMMENT '来源: map=地图搜索, google=谷歌搜索',
+    keyword VARCHAR(255) NOT NULL DEFAULT '' COMMENT '搜索关键词',
+    latitude DECIMAL(10, 7) NOT NULL DEFAULT 0 COMMENT '搜索中心点纬度',
+    longitude DECIMAL(10, 7) NOT NULL DEFAULT 0 COMMENT '搜索中心点经度',
+    radius INT NOT NULL DEFAULT 5000 COMMENT '搜索半径(米)',
+    address VARCHAR(500) NOT NULL DEFAULT '' COMMENT '搜索地点描述/城市名',
+    location VARCHAR(255) NOT NULL DEFAULT '' COMMENT '谷歌搜索地区限制',
+    language VARCHAR(20) NOT NULL DEFAULT '' COMMENT '搜索语言',
+    pages INT NOT NULL DEFAULT 1 COMMENT '搜索页数',
+    total_results INT NOT NULL DEFAULT 0 COMMENT '搜索到的结果数',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 0=进行中 1=完成 2=失败',
+    error_msg VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '错误信息',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '搜索时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_source (source),
+    INDEX idx_created_at (created_at),
+    INDEX idx_keyword (keyword)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='搜索记录表';
+
+-- 公司/商家表（地图搜索和谷歌搜索共用，按 place_id 去重）
+CREATE TABLE IF NOT EXISTS companies (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    source VARCHAR(20) NOT NULL DEFAULT 'map' COMMENT '来源: map / google',
+    place_id VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Google Place ID / 域名（唯一标识）',
+    name VARCHAR(500) NOT NULL DEFAULT '' COMMENT '公司/商家名称',
+    formatted_address VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '详细地址',
+    phone VARCHAR(100) NOT NULL DEFAULT '' COMMENT '电话号码',
+    international_phone VARCHAR(100) NOT NULL DEFAULT '' COMMENT '国际电话号码',
+    email VARCHAR(255) NOT NULL DEFAULT '' COMMENT '邮箱地址',
+    website VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '网站',
+    domain VARCHAR(255) NOT NULL DEFAULT '' COMMENT '域名',
+    rating DECIMAL(2, 1) NOT NULL DEFAULT 0.0 COMMENT '评分',
+    user_ratings_total INT NOT NULL DEFAULT 0 COMMENT '评价总数',
+    types VARCHAR(500) NOT NULL DEFAULT '' COMMENT '商家类型(逗号分隔)',
+    latitude DECIMAL(10, 7) NOT NULL DEFAULT 0 COMMENT '纬度',
+    longitude DECIMAL(10, 7) NOT NULL DEFAULT 0 COMMENT '经度',
+    business_status VARCHAR(50) NOT NULL DEFAULT '' COMMENT '营业状态',
+    opening_hours TEXT COMMENT '营业时间JSON',
+    photos TEXT COMMENT '照片引用JSON',
+    google_title VARCHAR(500) NOT NULL DEFAULT '' COMMENT '谷歌搜索标题',
+    google_snippet VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '谷歌搜索摘要',
+    page_title VARCHAR(500) NOT NULL DEFAULT '' COMMENT '网页标题',
+    description VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '网页描述',
+    scraped_emails VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '爬取的邮箱(JSON数组)',
+    scraped_phones VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '爬取的电话(JSON数组)',
+    social_links TEXT COMMENT '社交链接(JSON数组)',
+    body_text LONGTEXT COMMENT '网页正文',
+    scrape_success TINYINT(1) NOT NULL DEFAULT 0 COMMENT '爬取是否成功',
+    scrape_error VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '爬取错误信息',
+    filtered TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否被过滤',
+    filter_reason VARCHAR(500) NOT NULL DEFAULT '' COMMENT '过滤原因',
+    company_intro TEXT COMMENT '公司简介（AI生成）',
+    ai_analysis TEXT COMMENT 'AI分析结果JSON',
+    ai_score INT NOT NULL DEFAULT 0 COMMENT 'AI匹配评分(0-100)',
+    ai_analyzed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已AI分析',
+    search_record_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联的搜索记录ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE INDEX uk_place_id (place_id),
+    INDEX idx_search_record (search_record_id),
+    INDEX idx_source (source),
+    INDEX idx_email (email),
+    INDEX idx_domain (domain),
+    INDEX idx_name (name(100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司/商家统一表';
+
+-- 公司邮箱表（一个邮箱一条记录）
+CREATE TABLE IF NOT EXISTS company_emails (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    company_id BIGINT UNSIGNED NOT NULL COMMENT '关联的公司ID',
+    email VARCHAR(255) NOT NULL COMMENT '邮箱地址',
+    source VARCHAR(50) NOT NULL DEFAULT 'scrape' COMMENT '来源: scrape=爬取, google=Google, manual=手动',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    UNIQUE INDEX uk_company_email (company_id, email),
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司邮箱表';
+
+-- 邮件发送记录表
+CREATE TABLE IF NOT EXISTS email_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    company_id BIGINT UNSIGNED NOT NULL COMMENT '关联的公司ID',
+    to_email VARCHAR(255) NOT NULL COMMENT '收件人邮箱',
+    subject VARCHAR(500) NOT NULL DEFAULT '' COMMENT '邮件主题',
+    body TEXT NOT NULL COMMENT '邮件内容',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '状态: 0=待发送 1=已发送 2=失败',
+    error_msg VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '错误信息',
+    sent_at DATETIME COMMENT '发送时间',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_company_id (company_id),
+    INDEX idx_to_email (to_email),
+    INDEX idx_sent_at (sent_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邮件发送记录表';
+
+-- 定时任务配置表
+CREATE TABLE IF NOT EXISTS cron_tasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    name VARCHAR(255) NOT NULL COMMENT '任务名称',
+    task_type VARCHAR(20) NOT NULL COMMENT '任务类型: map=地图搜索, google=谷歌搜索',
+    cron_expr VARCHAR(100) NOT NULL COMMENT '执行间隔: 30m/2h/1d',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    params TEXT NOT NULL COMMENT '搜索参数(JSON)',
+    last_run_at DATETIME COMMENT '上次执行时间',
+    last_status TINYINT NOT NULL DEFAULT 0 COMMENT '上次状态: 0=未运行 1=成功 2=失败',
+    last_error VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '上次错误信息',
+    run_count INT NOT NULL DEFAULT 0 COMMENT '累计执行次数',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='定时任务配置表';

@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时任务管理 - Google Map 商家搜索系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+
+        /* 导航栏 */
+        .navbar {
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            color: white; padding: 16px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .navbar h1 { font-size: 20px; }
+        .navbar .nav-links a {
+            color: white; text-decoration: none; margin-left: 20px;
+            padding: 6px 14px; border-radius: 6px; font-size: 14px;
+            transition: background 0.2s;
+        }
+        .navbar .nav-links a:hover { background: rgba(255,255,255,0.2); }
+        .navbar .nav-links a.active { background: rgba(255,255,255,0.3); font-weight: 600; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
+
+        /* 顶部操作栏 */
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
+        }
+        .top-bar h2 { font-size: 22px; color: #1a1a1a; }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: #4285f4; color: white; }
+        .btn-primary:hover { background: #3367d6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(66,133,244,0.3); }
+        .btn-success { background: #34a853; color: white; }
+        .btn-success:hover { background: #2d9249; }
+        .btn-danger { background: #ea4335; color: white; }
+        .btn-danger:hover { background: #d33426; }
+        .btn-warning { background: #fbbc04; color: #333; }
+        .btn-warning:hover { background: #f0b000; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-outline {
+            background: transparent; border: 1.5px solid #4285f4; color: #4285f4;
+        }
+        .btn-outline:hover { background: #4285f4; color: white; }
+
+        /* 统计卡片 */
+        .stats {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white; border-radius: 12px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .number { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+        .stat-card .label { font-size: 13px; color: #666; }
+        .stat-card.total .number { color: #4285f4; }
+        .stat-card.active .number { color: #34a853; }
+        .stat-card.paused .number { color: #fbbc04; }
+        .stat-card.map .number { color: #ea4335; }
+
+        /* 任务列表 */
+        .task-list { display: flex; flex-direction: column; gap: 12px; }
+
+        .task-card {
+            background: white; border-radius: 12px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex; align-items: center; gap: 16px;
+            transition: all 0.2s;
+        }
+        .task-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); transform: translateY(-1px); }
+        .task-card.disabled { opacity: 0.6; }
+
+        .task-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; flex-shrink: 0;
+        }
+        .task-icon.map { background: #fce8e6; }
+        .task-icon.google { background: #e8f0fe; }
+
+        .task-info { flex: 1; min-width: 0; }
+        .task-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .task-meta { font-size: 12px; color: #888; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+        .task-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+        .task-params {
+            background: #f8f9fa; border-radius: 8px; padding: 8px 12px;
+            font-size: 12px; color: #555; margin-top: 8px;
+            font-family: 'Consolas', monospace; word-break: break-all;
+            max-height: 60px; overflow-y: auto;
+        }
+
+        /* 状态标签 */
+        .tag {
+            display: inline-block; padding: 2px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 600;
+        }
+        .tag-active { background: #e6f4ea; color: #1e8e3e; }
+        .tag-paused { background: #fef7e0; color: #b06000; }
+        .tag-map { background: #fce8e6; color: #c5221f; }
+        .tag-google { background: #e8f0fe; color: #1967d2; }
+
+        /* 开关 */
+        .switch {
+            position: relative; width: 44px; height: 24px; flex-shrink: 0;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; inset: 0; background: #ccc; border-radius: 24px;
+            cursor: pointer; transition: 0.3s;
+        }
+        .switch .slider::before {
+            content: ''; position: absolute; width: 18px; height: 18px;
+            background: white; border-radius: 50%; left: 3px; top: 3px;
+            transition: 0.3s;
+        }
+        .switch input:checked + .slider { background: #34a853; }
+        .switch input:checked + .slider::before { transform: translateX(20px); }
+
+        /* 操作按钮组 */
+        .task-actions {
+            display: flex; gap: 8px; flex-shrink: 0; align-items: center;
+        }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 1000; justify-content: center; align-items: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: white; border-radius: 16px; width: 560px; max-width: 90vw;
+            max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: modalIn 0.3s ease;
+        }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } }
+        .modal-header {
+            padding: 20px 24px; border-bottom: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 18px; }
+        .modal-close {
+            width: 32px; height: 32px; border: none; background: #f0f0f0;
+            border-radius: 50%; cursor: pointer; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-close:hover { background: #e0e0e0; }
+        .modal-body { padding: 24px; }
+        .modal-footer {
+            padding: 16px 24px; border-top: 1px solid #eee;
+            display: flex; justify-content: flex-end; gap: 10px;
+        }
+
+        /* 表单 */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-size: 13px; font-weight: 600; color: #555;
+            margin-bottom: 6px;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 10px 14px; border: 1.5px solid #ddd;
+            border-radius: 8px; font-size: 14px; transition: border-color 0.2s;
+            outline: none;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: #4285f4; box-shadow: 0 0 0 3px rgba(66,133,244,0.1);
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; font-family: 'Consolas', monospace; }
+        .form-group .hint { font-size: 11px; color: #999; margin-top: 4px; }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* 类型选择卡片 */
+        .type-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .type-card {
+            border: 2px solid #eee; border-radius: 12px; padding: 16px;
+            text-align: center; cursor: pointer; transition: all 0.2s;
+        }
+        .type-card:hover { border-color: #4285f4; background: #f8faff; }
+        .type-card.selected { border-color: #4285f4; background: #e8f0fe; }
+        .type-card .icon { font-size: 28px; margin-bottom: 6px; }
+        .type-card .title { font-size: 14px; font-weight: 600; }
+        .type-card .desc { font-size: 11px; color: #888; margin-top: 2px; }
+
+        /* 参数区域 */
+        .params-section { display: none; }
+        .params-section.show { display: block; }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: #999;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* 执行日志弹窗 */
+        .log-item {
+            padding: 10px 14px; border-left: 3px solid #4285f4;
+            background: #f8f9fa; border-radius: 0 8px 8px 0;
+            margin-bottom: 8px; font-size: 13px;
+        }
+        .log-item.error { border-left-color: #ea4335; }
+        .log-item .time { color: #888; font-size: 11px; }
+
+        /* toast */
+        .toast {
+            position: fixed; top: 20px; right: 20px; z-index: 2000;
+            padding: 12px 20px; border-radius: 10px; color: white;
+            font-size: 14px; font-weight: 500;
+            transform: translateX(120%); transition: transform 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #34a853; }
+        .toast.error { background: #ea4335; }
+        .toast.info { background: #4285f4; }
+
+        @media (max-width: 768px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .task-card { flex-direction: column; align-items: flex-start; }
+            .task-actions { width: 100%; justify-content: flex-end; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>⏰ 定时任务管理</h1>
+        <div class="nav-links">
+            <a href="/">🗺️ 地图搜索</a>
+            <a href="/google-search">🔍 谷歌搜索</a>
+            <a href="/admin">📊 后台管理</a>
+            <a href="/cron" class="active">⏰ 定时任务</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 统计 -->
+        <div class="stats">
+            <div class="stat-card total">
+                <div class="number" id="totalCount">0</div>
+                <div class="label">总任务数</div>
+            </div>
+            <div class="stat-card active">
+                <div class="number" id="activeCount">0</div>
+                <div class="label">运行中</div>
+            </div>
+            <div class="stat-card paused">
+                <div class="number" id="pausedCount">0</div>
+                <div class="label">已暂停</div>
+            </div>
+            <div class="stat-card map">
+                <div class="number" id="totalRuns">0</div>
+                <div class="label">总执行次数</div>
+            </div>
+        </div>
+
+        <!-- 操作栏 -->
+        <div class="top-bar">
+            <h2>任务列表</h2>
+            <button class="btn btn-primary" onclick="openCreateModal()">
+                ➕ 新建任务
+            </button>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="task-list" id="taskList">
+            <div class="empty-state">
+                <div class="icon">⏰</div>
+                <p>暂无定时任务，点击上方按钮创建</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建/编辑弹窗 -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">新建定时任务</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editTaskId" value="">
+
+                <div class="form-group">
+                    <label>任务名称</label>
+                    <input type="text" id="taskName" placeholder="如：北京餐厅每日扫描">
+                </div>
+
+                <div class="form-group">
+                    <label>任务类型</label>
+                    <div class="type-cards">
+                        <div class="type-card" data-type="map" onclick="selectType('map')">
+                            <div class="icon">🗺️</div>
+                            <div class="title">地图搜索</div>
+                            <div class="desc">按坐标+半径搜索附近商家</div>
+                        </div>
+                        <div class="type-card" data-type="google" onclick="selectType('google')">
+                            <div class="icon">🔍</div>
+                            <div class="title">谷歌搜索</div>
+                            <div class="desc">关键词搜索+网站爬取</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>执行间隔</label>
+                    <div class="form-row">
+                        <input type="number" id="intervalValue" placeholder="数值" min="1" value="1">
+                        <select id="intervalUnit">
+                            <option value="m">分钟</option>
+                            <option value="h" selected>小时</option>
+                            <option value="d">天</option>
+                        </select>
+                    </div>
+                    <div class="hint">示例：1小时 = 每隔1小时执行一次</div>
+                </div>
+
+                <!-- 地图搜索参数 -->
+                <div class="params-section" id="mapParams">
+                    <div class="form-group">
+                        <label>关键词</label>
+                        <input type="text" id="mapKeyword" placeholder="如：restaurant, hotel, shop">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>纬度</label>
+                            <input type="number" id="mapLat" step="any" placeholder="39.9042">
+                        </div>
+                        <div class="form-group">
+                            <label>经度</label>
+                            <input type="number" id="mapLng" step="any" placeholder="116.4074">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>搜索半径 (米)</label>
+                        <select id="mapRadius">
+                            <option value="1000">1 公里</option>
+                            <option value="3000">3 公里</option>
+                            <option value="5000" selected>5 公里</option>
+                            <option value="10000">10 公里</option>
+                            <option value="20000">20 公里</option>
+                            <option value="50000">50 公里</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 谷歌搜索参数 -->
+                <div class="params-section" id="googleParams">
+                    <div class="form-group">
+                        <label>搜索关键词</label>
+                        <input type="text" id="googleQuery" placeholder="如：import export company email">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>地区</label>
+                            <input type="text" id="googleLocation" placeholder="如：USA, China">
+                        </div>
+                        <div class="form-group">
+                            <label>语言</label>
+                            <select id="googleLanguage">
+                                <option value="en">English</option>
+                                <option value="zh-CN">中文</option>
+                                <option value="ja">日本語</option>
+                                <option value="ko">한국어</option>
+                                <option value="fr">Français</option>
+                                <option value="de">Deutsch</option>
+                                <option value="es">Español</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>搜索页数</label>
+                        <input type="number" id="googlePages" min="1" max="10" value="3">
+                        <div class="hint">每页约10条结果</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveTask()">💾 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let tasks = [];
+        let selectedType = '';
+        let editingId = null;
+
+        // 页面加载
+        loadTasks();
+
+        function showToast(msg, type = 'info') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // 加载任务列表
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/cron');
+                const data = await res.json();
+                tasks = data.data || [];
+                renderTasks();
+                updateStats();
+            } catch (e) {
+                showToast('加载失败: ' + e.message, 'error');
+            }
+        }
+
+        function updateStats() {
+            const total = tasks.length;
+            const active = tasks.filter(t => t.enabled).length;
+            const paused = total - active;
+            const totalRuns = tasks.reduce((sum, t) => sum + (t.run_count || 0), 0);
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('activeCount').textContent = active;
+            document.getElementById('pausedCount').textContent = paused;
+            document.getElementById('totalRuns').textContent = totalRuns;
+        }
+
+        function renderTasks() {
+            const list = document.getElementById('taskList');
+            if (tasks.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="icon">⏰</div><p>暂无定时任务，点击上方按钮创建</p></div>';
+                return;
+            }
+
+            list.innerHTML = tasks.map(task => {
+                const params = parseParams(task.params);
+                const isMap = task.task_type === 'map';
+                const typeIcon = isMap ? '🗺️' : '🔍';
+                const typeLabel = isMap ? '地图搜索' : '谷歌搜索';
+                const typeTag = isMap ? 'tag-map' : 'tag-google';
+                const statusTag = task.enabled ? 'tag-active' : 'tag-paused';
+                const statusText = task.enabled ? '运行中' : '已暂停';
+                const cardClass = task.enabled ? '' : 'disabled';
+
+                let paramsText = '';
+                if (isMap) {
+                    paramsText = `关键词: ${params.keyword || '-'} | 坐标: (${params.latitude || 0}, ${params.longitude || 0}) | 半径: ${(params.radius || 5000) / 1000}km`;
+                } else {
+                    paramsText = `关键词: ${params.query || '-'} | 地区: ${params.location || '-'} | 页数: ${params.pages || 3}`;
+                }
+
+                const lastRun = task.last_run_at ? new Date(task.last_run_at).toLocaleString('zh-CN') : '从未执行';
+                const nextRun = task.enabled && task.next_run_at ? new Date(task.next_run_at).toLocaleString('zh-CN') : '-';
+
+                return `
+                <div class="task-card ${cardClass}">
+                    <div class="task-icon ${task.task_type}">
+                        ${typeIcon}
+                    </div>
+                    <div class="task-info">
+                        <div class="task-name">
+                            ${task.name}
+                            <span class="tag ${typeTag}">${typeLabel}</span>
+                            <span class="tag ${statusTag}">${statusText}</span>
+                        </div>
+                        <div class="task-params">${paramsText}</div>
+                        <div class="task-meta">
+                            <span>⏱️ 间隔: ${task.cron_expr}</span>
+                            <span>🔄 已执行: ${task.run_count || 0} 次</span>
+                            <span>📅 上次: ${lastRun}</span>
+                            <span>⏭️ 下次: ${nextRun}</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <label class="switch" title="${task.enabled ? '暂停' : '启用'}">
+                            <input type="checkbox" ${task.enabled ? 'checked' : ''} onchange="toggleTask(${task.ID})">
+                            <span class="slider"></span>
+                        </label>
+                        <button class="btn btn-success btn-sm" onclick="runOnce(${task.ID})" title="立即执行一次">
+                            ▶️
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="editTask(${task.ID})" title="编辑">
+                            ✏️
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteTask(${task.ID})" title="删除">
+                            🗑️
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function parseParams(json) {
+            try { return JSON.parse(json || '{}'); } catch { return {}; }
+        }
+
+        // 选择任务类型
+        function selectType(type) {
+            selectedType = type;
+            document.querySelectorAll('.type-card').forEach(c => {
+                c.classList.toggle('selected', c.dataset.type === type);
+            });
+            document.getElementById('mapParams').classList.toggle('show', type === 'map');
+            document.getElementById('googleParams').classList.toggle('show', type === 'google');
+        }
+
+        // 打开新建弹窗
+        function openCreateModal() {
+            editingId = null;
+            document.getElementById('modalTitle').textContent = '新建定时任务';
+            document.getElementById('editTaskId').value = '';
+            document.getElementById('taskName').value = '';
+            document.getElementById('intervalValue').value = '1';
+            document.getElementById('intervalUnit').value = 'h';
+            document.getElementById('mapKeyword').value = '';
+            document.getElementById('mapLat').value = '';
+            document.getElementById('mapLng').value = '';
+            document.getElementById('mapRadius').value = '5000';
+            document.getElementById('googleQuery').value = '';
+            document.getElementById('googleLocation').value = '';
+            document.getElementById('googleLanguage').value = 'en';
+            document.getElementById('googlePages').value = '3';
+            selectType('');
+            document.getElementById('mapParams').classList.remove('show');
+            document.getElementById('googleParams').classList.remove('show');
+            document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById('taskModal').classList.add('show');
+        }
+
+        // 编辑任务
+        function editTask(id) {
+            const task = tasks.find(t => t.ID === id);
+            if (!task) return;
+
+            editingId = id;
+            document.getElementById('modalTitle').textContent = '编辑定时任务';
+            document.getElementById('editTaskId').value = id;
+            document.getElementById('taskName').value = task.name;
+
+            // 解析间隔
+            const expr = task.cron_expr || '1h';
+            const unit = expr.slice(-1);
+            const val = expr.slice(0, -1);
+            document.getElementById('intervalValue').value = val;
+            document.getElementById('intervalUnit').value = unit;
+
+            selectType(task.task_type);
+
+            const params = parseParams(task.params);
+            if (task.task_type === 'map') {
+                document.getElementById('mapKeyword').value = params.keyword || '';
+                document.getElementById('mapLat').value = params.latitude || '';
+                document.getElementById('mapLng').value = params.longitude || '';
+                document.getElementById('mapRadius').value = params.radius || 5000;
+            } else {
+                document.getElementById('googleQuery').value = params.query || '';
+                document.getElementById('googleLocation').value = params.location || '';
+                document.getElementById('googleLanguage').value = params.language || 'en';
+                document.getElementById('googlePages').value = params.pages || 3;
+            }
+
+            document.getElementById('taskModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('taskModal').classList.remove('show');
+            editingId = null;
+        }
+
+        // 保存任务
+        async function saveTask() {
+            const name = document.getElementById('taskName').value.trim();
+            if (!name) return showToast('请输入任务名称', 'error');
+            if (!selectedType) return showToast('请选择任务类型', 'error');
+
+            const intervalVal = document.getElementById('intervalValue').value;
+            const intervalUnit = document.getElementById('intervalUnit').value;
+            const cronExpr = intervalVal + intervalUnit;
+
+            let params = {};
+            if (selectedType === 'map') {
+                const keyword = document.getElementById('mapKeyword').value.trim();
+                const lat = parseFloat(document.getElementById('mapLat').value);
+                const lng = parseFloat(document.getElementById('mapLng').value);
+                const radius = parseInt(document.getElementById('mapRadius').value);
+                if (!keyword) return showToast('请输入搜索关键词', 'error');
+                if (isNaN(lat) || isNaN(lng)) return showToast('请输入有效坐标', 'error');
+                params = { keyword, latitude: lat, longitude: lng, radius };
+            } else {
+                const query = document.getElementById('googleQuery').value.trim();
+                if (!query) return showToast('请输入搜索关键词', 'error');
+                params = {
+                    query,
+                    location: document.getElementById('googleLocation').value.trim(),
+                    language: document.getElementById('googleLanguage').value,
+                    pages: parseInt(document.getElementById('googlePages').value) || 3,
+                };
+            }
+
+            const body = {
+                name,
+                task_type: selectedType,
+                cron_expr: cronExpr,
+                params: JSON.stringify(params),
+                enabled: true,
+            };
+
+            try {
+                let url = '/api/cron';
+                let method = 'POST';
+                if (editingId) {
+                    body.ID = editingId;
+                    method = 'PUT';
+                }
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.code !== 0) throw new Error(data.msg);
+                showToast(editingId ? '更新成功' : '创建成功', 'success');
+                closeModal();
+                loadTasks();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        // 启用/禁用
+        async function toggleTask(id) {
+            try {
+                const res = await fetch(`/api/cron/${id}/toggle`, { method: 'PUT' });
+                const data = await res.json();
+                if (data.code !== 0) throw new Error(data.msg);
+                const task = tasks.find(t => t.ID === id);
+                showToast(task && !task.enabled ? '已启用' : '已暂停', 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('操作失败: ' + e.message, 'error');
+                loadTasks();
+            }
+        }
+
+        // 立即执行一次
+        async function runOnce(id) {
+            const task = tasks.find(t => t.ID === id);
+            if (!confirm(`确定立即执行「${task ? task.name : ''}」？`)) return;
+            try {
+                const res = await fetch(`/api/cron/${id}/run`, { method: 'POST' });
+                const data = await res.json();
+                if (data.code !== 0) throw new Error(data.msg);
+                showToast('任务已触发执行', 'success');
+                setTimeout(loadTasks, 2000);
+            } catch (e) {
+                showToast('执行失败: ' + e.message, 'error');
+            }
+        }
+
+        // 删除任务
+        async function deleteTask(id) {
+            const task = tasks.find(t => t.ID === id);
+            if (!confirm(`确定删除「${task ? task.name : ''}」？此操作不可撤销。`)) return;
+            try {
+                const res = await fetch(`/api/cron/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.code !== 0) throw new Error(data.msg);
+                showToast('删除成功', 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        // 自动刷新（每30秒）
+        setInterval(loadTasks, 30000);
+
+        // 点击弹窗外部关闭
+        document.getElementById('taskModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // ESC关闭弹窗
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

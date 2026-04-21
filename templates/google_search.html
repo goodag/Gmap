@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谷歌搜索 + 网站爬取</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            color: #fff;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 20px;
+        }
+
+        .header .nav-links a {
+            color: #fff;
+            text-decoration: none;
+            margin-left: 16px;
+            opacity: 0.85;
+        }
+
+        .header .nav-links a:hover {
+            opacity: 1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        /* 搜索面板 */
+        .search-panel {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .search-panel h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: #4285f4;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #4285f4;
+            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.15);
+        }
+
+        /* 过滤器 */
+        .filter-section {
+            border-top: 1px solid #eee;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .filter-toggle {
+            cursor: pointer;
+            color: #4285f4;
+            font-size: 14px;
+            user-select: none;
+        }
+
+        .filter-body {
+            display: none;
+            margin-top: 12px;
+        }
+
+        .filter-body.show {
+            display: block;
+        }
+
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .filter-tag {
+            background: #e8f0fe;
+            color: #4285f4;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .filter-tag .remove {
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .checkbox-row {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .checkbox-row label {
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4285f4;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #3367d6;
+        }
+
+        .btn-primary:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: #34a853;
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #2d9249;
+        }
+
+        .btn-danger {
+            background: #ea4335;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c5342a;
+        }
+
+        .btn-outline {
+            background: #fff;
+            color: #4285f4;
+            border: 1px solid #4285f4;
+        }
+
+        .btn-outline:hover {
+            background: #e8f0fe;
+        }
+
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 12px;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .progress-bar.show {
+            display: block;
+        }
+
+        .progress-track {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4285f4, #34a853);
+            transition: width 0.3s;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #666;
+            margin-top: 6px;
+        }
+
+        /* 结果面板 */
+        .results-panel {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .results-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .results-header h3 {
+            font-size: 15px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 16px;
+        }
+
+        .stat {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .stat strong {
+            color: #333;
+            font-size: 16px;
+        }
+
+        /* 结果列表 */
+        .result-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.15s;
+        }
+
+        .result-item:hover {
+            background: #fafafa;
+        }
+
+        .result-item.filtered {
+            opacity: 0.5;
+            background: #fff5f5;
+        }
+
+        .result-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #1a0dab;
+            margin-bottom: 4px;
+        }
+
+        .result-title a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .result-title a:hover {
+            text-decoration: underline;
+        }
+
+        .result-url {
+            font-size: 12px;
+            color: #34a853;
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .result-snippet {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        .result-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .meta-tag {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+
+        .meta-email {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .meta-phone {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .meta-social {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .meta-filtered {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .meta-error {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .meta-success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        /* 任务历史 */
+        .tasks-panel {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .task-item {
+            padding: 14px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .task-item:hover {
+            background: #f8f9fa;
+        }
+
+        .task-info {
+            flex: 1;
+        }
+
+        .task-query {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .task-time {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .task-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .task-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .badge-running {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .badge-done {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .badge-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        /* 邮件弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            width: 500px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 {
+            margin-bottom: 16px;
+        }
+
+        .modal textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .modal .form-group {
+            margin-bottom: 12px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+
+        /* 详情面板 */
+        .detail-panel {
+            display: none;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+            padding: 24px;
+        }
+
+        .detail-panel.show {
+            display: block;
+        }
+
+        .detail-section {
+            margin-bottom: 16px;
+        }
+
+        .detail-section h4 {
+            font-size: 14px;
+            color: #4285f4;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+        }
+
+        .detail-emails {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .detail-email {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .detail-email:hover {
+            background: #c8e6c9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>🔍 谷歌搜索 + 网站爬取系统</h1>
+        <div class="nav-links">
+            <a href="/">📍 地图搜索</a>
+            <a href="/google-search">🔍 谷歌搜索</a>
+            <a href="/admin">📊 后台管理</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 搜索面板 -->
+        <div class="search-panel">
+            <h2>谷歌关键词搜索 → Colly爬取 → 提取联系信息</h2>
+            <div class="form-row">
+                <div class="form-group" style="flex:3;">
+                    <label>搜索关键词 *</label>
+                    <input type="text" id="searchQuery" placeholder="如: 深圳 外贸公司, Shenzhen electronics supplier..." />
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>地区限制（可选）</label>
+                    <input type="text" id="searchLocation" placeholder="如: 中国, US..." />
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>语言</label>
+                    <select id="searchLang">
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="ko">한국어</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:0.5;">
+                    <label>页数</label>
+                    <select id="searchPages">
+                        <option value="1">1页</option>
+                        <option value="2">2页</option>
+                        <option value="3" selected>3页</option>
+                        <option value="5">5页</option>
+                        <option value="10">10页</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 过滤器 -->
+            <div class="filter-section">
+                <div class="filter-toggle" onclick="toggleFilter()">⚙️ 过滤设置 <span id="filterArrow">▶</span></div>
+                <div class="filter-body" id="filterBody">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>包含关键词（网页内容含任意词则保留）</label>
+                            <input type="text" id="includeKw" placeholder="回车添加"
+                                onkeydown="handleTagInput(event,'include')" />
+                            <div class="filter-tags" id="includeTags"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>排除关键词（网页内容含任意词则排除）</label>
+                            <input type="text" id="excludeKw" placeholder="回车添加"
+                                onkeydown="handleTagInput(event,'exclude')" />
+                            <div class="filter-tags" id="excludeTags"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>排除域名（如 .gov, facebook.com）</label>
+                            <input type="text" id="excludeDomain" placeholder="回车添加"
+                                onkeydown="handleTagInput(event,'domain')" />
+                            <div class="filter-tags" id="domainTags"></div>
+                        </div>
+                    </div>
+                    <div class="checkbox-row">
+                        <label><input type="checkbox" id="filterRequireEmail"> 必须有邮箱</label>
+                        <label><input type="checkbox" id="filterRequirePhone"> 必须有电话</label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 16px; display: flex; gap: 12px;">
+                <button class="btn btn-primary" id="btnSearch" onclick="startSearch()">🔍 开始搜索并爬取</button>
+                <button class="btn btn-outline" onclick="loadTasks()">📋 查看历史任务</button>
+            </div>
+
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text" id="progressText">准备中...</div>
+            </div>
+        </div>
+
+        <!-- 当前搜索结果 -->
+        <div class="results-panel" id="resultsPanel" style="display:none;">
+            <div class="results-header">
+                <h3>搜索结果</h3>
+                <div class="stats">
+                    <div class="stat">总URL <strong id="statTotal">0</strong></div>
+                    <div class="stat">爬取成功 <strong id="statScraped">0</strong></div>
+                    <div class="stat">有邮箱 <strong id="statEmails">0</strong></div>
+                    <div class="stat">已过滤 <strong id="statFiltered">0</strong></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-success btn-sm" onclick="exportAllEmails()">📋 导出邮箱</button>
+                    <button class="btn btn-outline btn-sm" onclick="batchSendEmail()">✉️ 批量发邮件</button>
+                </div>
+            </div>
+            <div class="result-list" id="resultList"></div>
+        </div>
+
+        <!-- 详情面板 -->
+        <div class="detail-panel" id="detailPanel">
+            <h3 id="detailTitle"></h3>
+            <div class="detail-section">
+                <h4>📧 邮箱</h4>
+                <div class="detail-emails" id="detailEmails">-</div>
+            </div>
+            <div class="detail-section">
+                <h4>📞 电话</h4>
+                <div id="detailPhones">-</div>
+            </div>
+            <div class="detail-section">
+                <h4>🔗 社交链接</h4>
+                <div id="detailSocials">-</div>
+            </div>
+            <div class="detail-section">
+                <h4>📄 页面描述</h4>
+                <div id="detailDesc" style="font-size:13px;color:#666;line-height:1.6;">-</div>
+            </div>
+            <div class="detail-section">
+                <h4>📝 正文摘要</h4>
+                <div id="detailBody"
+                    style="font-size:12px;color:#888;max-height:200px;overflow-y:auto;line-height:1.5;white-space:pre-wrap;">
+                    -</div>
+            </div>
+            <button class="btn btn-outline btn-sm"
+                onclick="document.getElementById('detailPanel').classList.remove('show')">关闭</button>
+        </div>
+
+        <!-- 历史任务 -->
+        <div class="tasks-panel" id="tasksPanel" style="display:none;">
+            <div class="results-header">
+                <h3>📋 历史搜索任务</h3>
+                <button class="btn btn-outline btn-sm"
+                    onclick="document.getElementById('tasksPanel').style.display='none'">关闭</button>
+            </div>
+            <div id="taskList"></div>
+        </div>
+    </div>
+
+    <!-- 邮件弹窗 -->
+    <div class="modal-overlay" id="emailModal">
+        <div class="modal">
+            <h3>✉️ 发送邮件</h3>
+            <div class="form-group">
+                <label>收件人</label>
+                <input type="text" id="emailTo" readonly style="background:#f5f5f5;" />
+            </div>
+            <div class="form-group">
+                <label>主题</label>
+                <input type="text" id="emailSubject" placeholder="邮件主题" />
+            </div>
+            <div class="form-group">
+                <label>内容</label>
+                <textarea id="emailBody" placeholder="邮件正文..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>发送冷却（分钟，0=不限制）</label>
+                <input type="number" id="emailCooldown" value="60" min="0" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeEmailModal()">取消</button>
+                <button class="btn btn-primary" onclick="sendEmail()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 过滤器标签数据
+        const filterTags = { include: [], exclude: [], domain: [] };
+        let currentResults = [];
+        let currentTaskId = null;
+
+        function toggleFilter() {
+            const body = document.getElementById('filterBody');
+            const arrow = document.getElementById('filterArrow');
+            body.classList.toggle('show');
+            arrow.textContent = body.classList.contains('show') ? '▼' : '▶';
+        }
+
+        function handleTagInput(e, type) {
+            if (e.key !== 'Enter') return;
+            const val = e.target.value.trim();
+            if (!val) return;
+            filterTags[type].push(val);
+            e.target.value = '';
+            renderTags(type);
+        }
+
+        function renderTags(type) {
+            const containerId = type === 'include' ? 'includeTags' : type === 'exclude' ? 'excludeTags' : 'domainTags';
+            document.getElementById(containerId).innerHTML = filterTags[type].map((t, i) =>
+                `<span class="filter-tag">${t} <span class="remove" onclick="removeTag('${type}',${i})">×</span></span>`
+            ).join('');
+        }
+
+        function removeTag(type, idx) {
+            filterTags[type].splice(idx, 1);
+            renderTags(type);
+        }
+
+        function buildFilter() {
+            const filter = {};
+            if (filterTags.include.length) filter.include_keywords = filterTags.include;
+            if (filterTags.exclude.length) filter.exclude_keywords = filterTags.exclude;
+            if (filterTags.domain.length) filter.exclude_domains = filterTags.domain;
+            if (document.getElementById('filterRequireEmail').checked) filter.require_email = true;
+            if (document.getElementById('filterRequirePhone').checked) filter.require_phone = true;
+            return Object.keys(filter).length ? filter : null;
+        }
+
+        // 搜索
+        async function startSearch() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) { alert('请输入搜索关键词'); return; }
+
+            const btn = document.getElementById('btnSearch');
+            btn.disabled = true;
+            btn.textContent = '⏳ 搜索爬取中...';
+
+            const progressBar = document.getElementById('progressBar');
+            progressBar.classList.add('show');
+            document.getElementById('progressFill').style.width = '10%';
+            document.getElementById('progressText').textContent = '正在调用 Google 搜索 API...';
+
+            const body = {
+                query: query,
+                location: document.getElementById('searchLocation').value.trim(),
+                language: document.getElementById('searchLang').value,
+                pages: parseInt(document.getElementById('searchPages').value),
+                filter: buildFilter()
+            };
+
+            try {
+                const resp = await fetch('/api/google-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+
+                document.getElementById('progressFill').style.width = '100%';
+                document.getElementById('progressText').textContent = '完成！';
+
+                if (data.code === 0) {
+                    currentResults = data.data.results || [];
+                    currentTaskId = data.data.task_id;
+                    renderResults(currentResults);
+                } else {
+                    alert('搜索失败: ' + (data.msg || '未知错误'));
+                }
+            } catch (err) {
+                alert('请求失败: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 开始搜索并爬取';
+                setTimeout(() => progressBar.classList.remove('show'), 2000);
+            }
+        }
+
+        // 渲染结果
+        function renderResults(results) {
+            const panel = document.getElementById('resultsPanel');
+            panel.style.display = 'block';
+
+            let totalEmails = 0, scraped = 0, filtered = 0;
+            results.forEach(r => {
+                if (r.page && r.page.success) scraped++;
+                if (r.filtered) filtered++;
+                if (r.page && r.page.emails && r.page.emails.length) totalEmails++;
+            });
+
+            document.getElementById('statTotal').textContent = results.length;
+            document.getElementById('statScraped').textContent = scraped;
+            document.getElementById('statEmails').textContent = totalEmails;
+            document.getElementById('statFiltered').textContent = filtered;
+
+            const list = document.getElementById('resultList');
+            list.innerHTML = results.map((r, i) => {
+                const emails = (r.page && r.page.emails) || [];
+                const phones = (r.page && r.page.phones) || [];
+                const socials = (r.page && r.page.social_links) || [];
+                const cls = r.filtered ? 'result-item filtered' : 'result-item';
+
+                let metaHtml = '';
+                if (r.page && r.page.success) metaHtml += '<span class="meta-tag meta-success">✓ 爬取成功</span>';
+                if (r.page && r.page.error) metaHtml += `<span class="meta-tag meta-error">⚠ ${r.page.error}</span>`;
+                if (r.filtered) metaHtml += `<span class="meta-tag meta-filtered">🚫 ${r.filter_reason}</span>`;
+                emails.forEach(e => metaHtml += `<span class="meta-tag meta-email" onclick="openEmailModal('${e}','${r.google_title}')" style="cursor:pointer">📧 ${e}</span>`);
+                phones.forEach(p => metaHtml += `<span class="meta-tag meta-phone">📞 ${p}</span>`);
+                if (socials.length) metaHtml += `<span class="meta-tag meta-social">🔗 ${socials.length}个社交链接</span>`;
+
+                return `<div class="${cls}" onclick="showDetail(${i})">
+                    <div class="result-title"><a href="${r.url}" target="_blank" onclick="event.stopPropagation()">${r.google_title || r.url}</a></div>
+                    <div class="result-url">${r.url} (${r.domain})</div>
+                    <div class="result-snippet">${r.google_snippet || (r.page && r.page.description) || ''}</div>
+                    <div class="result-meta">${metaHtml}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // 显示详情
+        function showDetail(idx) {
+            const r = currentResults[idx];
+            if (!r) return;
+            const panel = document.getElementById('detailPanel');
+            panel.classList.add('show');
+
+            document.getElementById('detailTitle').textContent = r.google_title || r.url;
+
+            const emails = (r.page && r.page.emails) || [];
+            document.getElementById('detailEmails').innerHTML = emails.length
+                ? emails.map(e => `<span class="detail-email" onclick="openEmailModal('${e}','${r.google_title}')">${e}</span>`).join('')
+                : '<span style="color:#999">未发现邮箱</span>';
+
+            const phones = (r.page && r.page.phones) || [];
+            document.getElementById('detailPhones').innerHTML = phones.length
+                ? phones.map(p => `<span class="meta-tag meta-phone">${p}</span>`).join(' ')
+                : '<span style="color:#999">未发现电话</span>';
+
+            const socials = (r.page && r.page.social_links) || [];
+            document.getElementById('detailSocials').innerHTML = socials.length
+                ? socials.map(s => `<a href="${s}" target="_blank" style="font-size:13px;margin-right:8px">${s}</a>`).join('<br>')
+                : '<span style="color:#999">未发现社交链接</span>';
+
+            document.getElementById('detailDesc').textContent = (r.page && r.page.description) || '-';
+            document.getElementById('detailBody').textContent = (r.page && r.page.body_text) || '-';
+        }
+
+        // 导出邮箱
+        function exportAllEmails() {
+            const emails = new Set();
+            currentResults.forEach(r => {
+                if (r.page && r.page.emails && !r.filtered) {
+                    r.page.emails.forEach(e => emails.add(e));
+                }
+            });
+            if (emails.size === 0) { alert('没有可导出的邮箱'); return; }
+            const text = [...emails].join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                alert(`已复制 ${emails.size} 个邮箱到剪贴板`);
+            });
+        }
+
+        // 邮件
+        function openEmailModal(email, title) {
+            event && event.stopPropagation();
+            document.getElementById('emailTo').value = email;
+            document.getElementById('emailSubject').value = 'Re: ' + (title || '');
+            document.getElementById('emailModal').classList.add('show');
+        }
+
+        function closeEmailModal() {
+            document.getElementById('emailModal').classList.remove('show');
+        }
+
+        async function sendEmail() {
+            const to = document.getElementById('emailTo').value;
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            const cooldown = parseInt(document.getElementById('emailCooldown').value) || 0;
+
+            if (!to || !subject || !body) { alert('请填写完整信息'); return; }
+
+            try {
+                const resp = await fetch('/api/email/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to_email: to, subject, body, cooldown_minutes: cooldown })
+                });
+                const data = await resp.json();
+                if (data.code === 0) {
+                    alert('邮件发送成功！');
+                    closeEmailModal();
+                } else {
+                    alert('发送失败: ' + (data.msg || '未知错误'));
+                }
+            } catch (err) {
+                alert('请求失败: ' + err.message);
+            }
+        }
+
+        // 批量发邮件
+        function batchSendEmail() {
+            const emails = [];
+            currentResults.forEach(r => {
+                if (r.page && r.page.emails && !r.filtered) {
+                    r.page.emails.forEach(e => emails.push(e));
+                }
+            });
+            if (emails.length === 0) { alert('没有可发送的邮箱'); return; }
+            const unique = [...new Set(emails)];
+            document.getElementById('emailTo').value = unique.join(', ');
+            document.getElementById('emailSubject').value = '';
+            document.getElementById('emailModal').classList.add('show');
+        }
+
+        // 历史任务
+        async function loadTasks() {
+            try {
+                const resp = await fetch('/api/google-search/tasks?page=1&page_size=20');
+                const data = await resp.json();
+                if (data.code !== 0) return;
+
+                const panel = document.getElementById('tasksPanel');
+                panel.style.display = 'block';
+                const list = document.getElementById('taskList');
+
+                list.innerHTML = (data.data.list || []).map(t => {
+                    const statusCls = t.status === 0 ? 'badge-running' : t.status === 1 ? 'badge-done' : 'badge-error';
+                    const statusText = t.status === 0 ? '进行中' : t.status === 1 ? '已完成' : '失败';
+                    return `<div class="task-item" onclick="loadTaskResults(${t.id})">
+                        <div class="task-info">
+                            <div class="task-query">🔍 ${t.query}</div>
+                            <div class="task-time">${t.location ? t.location + ' | ' : ''}${new Date(t.created_at).toLocaleString()}</div>
+                        </div>
+                        <div class="task-stats">
+                            <span class="stat">找到 <strong>${t.total_found}</strong></span>
+                            <span class="stat">爬取 <strong>${t.total_scraped}</strong></span>
+                            <span class="task-badge ${statusCls}">${statusText}</span>
+                            <button class="btn btn-success btn-sm" onclick="event.stopPropagation();exportTaskEmails(${t.id})">📋 邮箱</button>
+                            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteTask(${t.id})">🗑️</button>
+                        </div>
+                    </div>`;
+                }).join('') || '<div style="padding:24px;text-align:center;color:#999;">暂无搜索任务</div>';
+            } catch (err) {
+                alert('加载失败: ' + err.message);
+            }
+        }
+
+        async function loadTaskResults(taskId) {
+            try {
+                const resp = await fetch(`/api/google-search/tasks/${taskId}/results?page_size=200`);
+                const data = await resp.json();
+                if (data.code !== 0) return;
+
+                // 转换 DB 格式到前端格式
+                currentTaskId = taskId;
+                currentResults = (data.data.list || []).map(r => {
+                    let emails = [], phones = [], socials = [];
+                    try { emails = JSON.parse(r.emails || '[]'); } catch (e) { }
+                    try { phones = JSON.parse(r.phones || '[]'); } catch (e) { }
+                    try { socials = JSON.parse(r.social_links || '[]'); } catch (e) { }
+
+                    return {
+                        google_title: r.google_title,
+                        google_snippet: r.google_snippet,
+                        url: r.url,
+                        domain: r.domain,
+                        filtered: r.filtered,
+                        filter_reason: r.filter_reason,
+                        page: {
+                            title: r.page_title,
+                            description: r.description,
+                            emails: emails,
+                            phones: phones,
+                            social_links: socials,
+                            body_text: r.body_text,
+                            success: r.scrape_success,
+                            error: r.scrape_error
+                        }
+                    };
+                });
+                renderResults(currentResults);
+            } catch (err) {
+                alert('加载失败: ' + err.message);
+            }
+        }
+
+        async function exportTaskEmails(taskId) {
+            try {
+                const resp = await fetch(`/api/google-search/tasks/${taskId}/emails`);
+                const data = await resp.json();
+                if (data.code !== 0 || !data.data.emails.length) { alert('没有邮箱数据'); return; }
+                const text = data.data.emails.map(e => e.email).join('\n');
+                navigator.clipboard.writeText(text).then(() => {
+                    alert(`已复制 ${data.data.total} 个邮箱到剪贴板`);
+                });
+            } catch (err) {
+                alert('导出失败: ' + err.message);
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定删除此任务及所有结果？')) return;
+            try {
+                await fetch(`/api/google-search/tasks/${taskId}`, { method: 'DELETE' });
+                loadTasks();
+            } catch (err) {
+                alert('删除失败: ' + err.message);
+            }
+        }
+    </script>
+</body>
+
+</html>
