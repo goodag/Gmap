@@ -19,17 +19,22 @@
         "username": "530784848@qq.com",
         "password": "edxrwmxlludobifi",
         "from_name": "商家搜索系统",
-        "useSsl": true
+        "useSsl": true,
+        "auto_send_enabled": true,
+        "test_mode": true,
+        "test_recipient": "962280751@qq.com",
+        "cooldown_minutes": 1,
+        "marketing_subject": "Summer Resort Hats for Your Store"
     },
     "proxy": {
         "enabled": true,
         "address": "",
-        "chrome_path": ""
+        "chrome_path": "/usr/bin/chromium-browser"
     },
     "doubao": {
         "api_key": "7d3c9f66-8827-4bc7-b33a-af910c7ede46",
         "model_id": "Doubao-Seed-2.0-lite",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "enabled": false
+        "enabled": true
     }
 }

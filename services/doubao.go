@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,8 +37,12 @@ type DoubaoService struct {
 
 func NewDoubaoService() *DoubaoService {
 	cfg := config.Get().Doubao
+	modelID := cfg.ModelID
+	if strings.TrimSpace(modelID) == "" {
+		modelID = "Doubao-Seed-2.0-lite"
+	}
 	s := &DoubaoService{
-		modelID: cfg.ModelID,
+		modelID: modelID,
 		enabled: cfg.Enabled,
 	}
 	if cfg.Enabled && cfg.APIKey != "" {
@@ -50,8 +55,7 @@ func NewDoubaoService() *DoubaoService {
 }
 
 func (s *DoubaoService) IsEnabled() bool {
-	// AI智能分析模块已禁用
-	return false
+	return s.enabled && s.client != nil
 }
 
 // AnalyzeCompany 分析公司网页内容、生成简介、判断是否符合要求
@@ -138,6 +142,62 @@ func (s *DoubaoService) AnalyzeCompany(name, website, pageTitle, description, bo
 	}
 
 	return &result, nil
+}
+
+// GenerateMailGreeting 生成30字以内招呼语，结合店铺信息与天气
+func (s *DoubaoService) GenerateMailGreeting(storeName, intro, weather string, maxChars int) (string, error) {
+	if !s.IsEnabled() {
+		return "", fmt.Errorf("豆包AI未启用")
+	}
+	if maxChars <= 0 {
+		maxChars = 30
+	}
+
+	prompt := fmt.Sprintf(`请基于以下信息生成一条中文招呼语：
+店铺名：%s
+店铺简介：%s
+当地天气：%s
+
+要求：
+1) 语气友好商务
+2) 必须在%d个中文字符以内
+3) 只返回一句纯文本，不要引号，不要解释`, storeName, intro, weather, maxChars)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	systemContent := "你是外贸邮件写作助手，擅长写简洁问候语。"
+	resp, err := s.client.CreateChatCompletion(ctx, model.ChatCompletionRequest{
+		Model: s.modelID,
+		Messages: []*model.ChatCompletionMessage{
+			{
+				Role:    model.ChatMessageRoleSystem,
+				Content: &model.ChatCompletionMessageContent{StringValue: &systemContent},
+			},
+			{
+				Role:    model.ChatMessageRoleUser,
+				Content: &model.ChatCompletionMessageContent{StringValue: &prompt},
+			},
+		},
+		Temperature: 0.5,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == nil || resp.Choices[0].Message.Content.StringValue == nil {
+		return "", fmt.Errorf("豆包返回空结果")
+	}
+
+	text := strings.TrimSpace(*resp.Choices[0].Message.Content.StringValue)
+	text = strings.Trim(text, "\"'“”")
+	r := []rune(text)
+	if len(r) > maxChars {
+		text = string(r[:maxChars])
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("豆包返回空文案, maxChars=%s", strconv.Itoa(maxChars))
+	}
+	return text, nil
 }
 
 // BatchAnalyze 批量分析多个公司

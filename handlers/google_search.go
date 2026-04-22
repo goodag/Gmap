@@ -17,6 +17,7 @@ type GoogleSearchHandler struct {
 	db     *gorm.DB
 	svc    *services.GoogleSearchService
 	filter *services.ContentFilter
+	email  *services.EmailService
 }
 
 func NewGoogleSearchHandler(db *gorm.DB) *GoogleSearchHandler {
@@ -25,6 +26,7 @@ func NewGoogleSearchHandler(db *gorm.DB) *GoogleSearchHandler {
 		db:     db,
 		svc:    services.NewGoogleSearchService(cfg.Google.APIKey, cfg.Google.CustomSearchID),
 		filter: services.NewContentFilter(),
+		email:  services.NewEmailService(db),
 	}
 }
 
@@ -248,6 +250,7 @@ func (h *GoogleSearchHandler) ExportEmails(c *gin.Context) {
 func (h *GoogleSearchHandler) upsertCompany(company *models.Company) {
 	if company.PlaceID == "" {
 		h.db.Create(company)
+		h.email.TrySendMarketingEmail(company)
 		return
 	}
 	var existing models.Company
@@ -258,4 +261,5 @@ func (h *GoogleSearchHandler) upsertCompany(company *models.Company) {
 		company.ID = existing.ID
 		h.db.Model(&existing).Updates(company)
 	}
+	h.email.TrySendMarketingEmail(company)
 }

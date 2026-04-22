@@ -216,6 +216,20 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 	}
 
 	results := make([]RodConcurrentResult, len(req.Cities))
+
+	// 并发任务开始前先做一次浏览器预检查，避免每个城市都重复等待失败
+	if err := s.EnsureBrowser(); err != nil {
+		for i, city := range req.Cities {
+			city = strings.TrimSpace(city)
+			if city == "" {
+				results[i] = RodConcurrentResult{City: city, Error: "城市名为空", Duration: "0s"}
+				continue
+			}
+			results[i] = RodConcurrentResult{City: city, Error: err.Error(), Duration: "0s"}
+		}
+		return results
+	}
+
 	sem := make(chan struct{}, req.Concurrent) // 信号量控制并发数
 	var wg sync.WaitGroup
 
@@ -288,14 +302,38 @@ func (s *RodMapsService) findChromeBin() string {
 			log.Printf("[Rod] 使用配置的 Chrome: %s", s.chromePath)
 			return s.chromePath
 		}
+		log.Printf("[Rod] 配置的 chrome_path 不存在: %s", s.chromePath)
 	}
 
-	// 2. 系统安装的 Chrome/Chromium（兼容 CentOS 7 的 glibc 2.17）
+	// 2. 环境变量指定路径（部署场景常用）
+	envChrome := strings.TrimSpace(os.Getenv("CHROME_BIN"))
+	if envChrome != "" {
+		if _, err := os.Stat(envChrome); err == nil {
+			log.Printf("[Rod] 使用 CHROME_BIN: %s", envChrome)
+			return envChrome
+		}
+		log.Printf("[Rod] CHROME_BIN 指向文件不存在: %s", envChrome)
+	}
+	envChrome = strings.TrimSpace(os.Getenv("CHROME_PATH"))
+	if envChrome != "" {
+		if _, err := os.Stat(envChrome); err == nil {
+			log.Printf("[Rod] 使用 CHROME_PATH: %s", envChrome)
+			return envChrome
+		}
+		log.Printf("[Rod] CHROME_PATH 指向文件不存在: %s", envChrome)
+	}
+
+	// 3. 系统安装的 Chrome/Chromium
 	candidates := []string{
 		"/usr/bin/google-chrome-stable",
 		"/usr/bin/google-chrome",
+		"/opt/google/chrome/google-chrome",
+		"/opt/google/chrome/chrome",
+		"/usr/bin/microsoft-edge-stable",
+		"/usr/bin/microsoft-edge",
 		"/usr/bin/chromium-browser",
 		"/usr/bin/chromium",
+		"/usr/lib64/chromium-browser/chromium-browser",
 		"/snap/bin/chromium",
 		"/usr/lib/chromium-browser/chromium-browser",
 		// Windows 路径
@@ -310,39 +348,45 @@ func (s *RodMapsService) findChromeBin() string {
 		}
 	}
 
-	// 3. 没找到系统 Chrome，让 Rod 自动下载（可能不兼容旧系统）
-	log.Println("[Rod] ⚠️ 未找到系统 Chrome，将使用 Rod 自动下载的 Chromium（可能不兼容 CentOS 7）")
+	// 不再回退到 Rod 自动下载的 Chromium，避免在旧 glibc 环境长时间等待后失败
+	log.Println("[Rod] ⚠️ 未找到可用系统浏览器，已禁用 Rod 内置 Chromium 回退")
 	return ""
+}
+
+func (s *RodMapsService) requireChromeBin() (string, error) {
+	chromeBin := s.findChromeBin()
+	if chromeBin != "" {
+		return chromeBin, nil
+	}
+
+	return "", fmt.Errorf("未找到可用 Chrome/Chromium。请安装系统浏览器并在 config.json 中设置 proxy.chrome_path，或设置环境变量 CHROME_BIN（CentOS 7 禁止使用 Rod 自动下载 Chromium，因 GLIBC 版本不兼容）")
 }
 
 func (s *RodMapsService) EnsureBrowser() error {
 	log.Println("[Rod] 检查浏览器环境...")
 
-	chromeBin := s.findChromeBin()
+	chromeBin, err := s.requireChromeBin()
+	if err != nil {
+		log.Printf("[Rod] ❌ 浏览器预检查失败: %v", err)
+		log.Println("[Rod] 💡 建议:")
+		log.Println("[Rod]   1) CentOS 7 安装系统 Chrome 并配置 proxy.chrome_path")
+		log.Println("[Rod]   2) 或设置环境变量 CHROME_BIN=/usr/bin/google-chrome-stable")
+		return err
+	}
 
 	l := launcher.New().
 		Leakless(false).
 		Headless(true).
 		Set("no-sandbox").
 		Set("disable-gpu").
-		Set("disable-dev-shm-usage")
-
-	if chromeBin != "" {
-		l = l.Bin(chromeBin)
-	}
+		Set("disable-dev-shm-usage").
+		Bin(chromeBin)
 
 	controlURL, err := l.Launch()
 	if err != nil {
 		log.Printf("[Rod] ❌ 浏览器启动失败: %v", err)
-		if chromeBin == "" {
-			log.Println("[Rod] 💡 建议安装系统 Chrome:")
-			log.Println("[Rod]   CentOS 7: yum install -y google-chrome-stable")
-			log.Println("[Rod]   Ubuntu:   apt install -y google-chrome-stable")
-			log.Println("[Rod]   或手动指定路径: config.json -> proxy.chrome_path")
-		} else {
-			log.Println("[Rod] 💡 请安装依赖库:")
-			log.Println("[Rod]   sudo yum install -y atk at-spi2-atk cups-libs libXcomposite libXdamage libXrandr mesa-libgbm pango alsa-lib gtk3 nss libdrm libxkbcommon")
-		}
+		log.Println("[Rod] 💡 请安装依赖库:")
+		log.Println("[Rod]   sudo yum install -y atk at-spi2-atk cups-libs libXcomposite libXdamage libXrandr mesa-libgbm pango alsa-lib gtk3 nss libdrm libxkbcommon")
 		return fmt.Errorf("浏览器启动失败: %v", err)
 	}
 
@@ -352,16 +396,15 @@ func (s *RodMapsService) EnsureBrowser() error {
 	}
 	browser.MustClose()
 
-	if chromeBin != "" {
-		log.Printf("[Rod] ✅ 浏览器就绪 (使用: %s)", chromeBin)
-	} else {
-		log.Println("[Rod] ✅ 浏览器就绪 (使用: Rod 内置 Chromium)")
-	}
+	log.Printf("[Rod] ✅ 浏览器就绪 (使用: %s)", chromeBin)
 	return nil
 }
 
 func (s *RodMapsService) launchBrowser() (*rod.Browser, error) {
-	chromeBin := s.findChromeBin()
+	chromeBin, err := s.requireChromeBin()
+	if err != nil {
+		return nil, err
+	}
 
 	l := launcher.New().
 		Leakless(false).
@@ -376,14 +419,11 @@ func (s *RodMapsService) launchBrowser() (*rod.Browser, error) {
 		Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36").
 		Set("disable-features", "TranslateUI").
 		Set("disable-extensions").
-		Set("disable-component-extensions-with-background-pages")
+		Set("disable-component-extensions-with-background-pages").
+		Bin(chromeBin)
 
 	if s.proxyAddr != "" {
 		l = l.Proxy(s.proxyAddr)
-	}
-
-	if chromeBin != "" {
-		l = l.Bin(chromeBin)
 	}
 
 	log.Println("[Rod] 正在启动浏览器...")

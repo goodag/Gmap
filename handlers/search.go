@@ -21,6 +21,7 @@ type SearchHandler struct {
 	rodService    *services.RodMapsService
 	scraper       *services.ScraperService
 	doubao        *services.DoubaoService
+	emailService  *services.EmailService
 }
 
 func NewSearchHandler(db *gorm.DB) *SearchHandler {
@@ -30,6 +31,7 @@ func NewSearchHandler(db *gorm.DB) *SearchHandler {
 		rodService:    services.NewRodMapsService(),
 		scraper:       services.NewScraperService(),
 		doubao:        services.NewDoubaoService(),
+		emailService:  services.NewEmailService(db),
 	}
 }
 
@@ -64,27 +66,29 @@ func (h *SearchHandler) scrapeCompanyWebsites(companies []models.Company) []mode
 			companies[i].Phone = page.Phones[0]
 		}
 
-		// 更新数据库
-		updates := map[string]interface{}{
-			"scraped_emails": string(emailsJSON),
-			"scraped_phones": string(phonesJSON),
-			"social_links":   string(socialJSON),
-			"page_title":     page.Title,
-			"description":    page.Description,
-			"body_text":      page.BodyText,
-			"scrape_success": page.Success,
-			"scrape_error":   page.Error,
-		}
-		if len(page.Emails) > 0 && companies[i].Email != "" {
-			updates["email"] = companies[i].Email
-		}
-		if len(page.Phones) > 0 {
-			updates["phone"] = companies[i].Phone
-		}
-		h.db.Model(&models.Company{}).Where("id = ?", companies[i].ID).Updates(updates)
+		// 如果公司已经入库，则同步更新数据库；未入库时仅更新内存对象
+		if companies[i].ID > 0 {
+			updates := map[string]interface{}{
+				"scraped_emails": string(emailsJSON),
+				"scraped_phones": string(phonesJSON),
+				"social_links":   string(socialJSON),
+				"page_title":     page.Title,
+				"description":    page.Description,
+				"body_text":      page.BodyText,
+				"scrape_success": page.Success,
+				"scrape_error":   page.Error,
+			}
+			if len(page.Emails) > 0 && companies[i].Email != "" {
+				updates["email"] = companies[i].Email
+			}
+			if len(page.Phones) > 0 {
+				updates["phone"] = companies[i].Phone
+			}
+			h.db.Model(&models.Company{}).Where("id = ?", companies[i].ID).Updates(updates)
 
-		// 邮箱一个一条记录写入 company_emails
-		h.saveCompanyEmails(companies[i].ID, page.Emails, "scrape")
+			// 邮箱一个一条记录写入 company_emails
+			h.saveCompanyEmails(companies[i].ID, page.Emails, "scrape")
+		}
 
 		log.Printf("[Scrape] %s: 邮箱=%v, 电话=%v, 社交=%d", companies[i].Name, page.Emails, page.Phones, len(page.SocialLinks))
 	}
@@ -108,12 +112,62 @@ func (h *SearchHandler) saveCompanyEmails(companyID uint64, emails []string, sou
 	}
 }
 
-// analyzeCompaniesWithAI 用豆包AI分析公司网页内容，低于阈值的公司不入库并从列表中移除
-// AI分析模块已禁用，此函数仅保留代码，不执行实际分析
+// analyzeCompaniesWithAI 用豆包AI分析公司网页内容，低于阈值或不符合要求的公司会被过滤
 func (h *SearchHandler) analyzeCompaniesWithAI(companies []models.Company, requirement string, scoreThreshold int) []models.Company {
-	// AI智能分析模块已禁用，直接返回原列表
-	log.Printf("[AI] AI分析模块已禁用，跳过分析")
-	return companies
+	requirement = strings.TrimSpace(requirement)
+	if requirement == "" {
+		return companies
+	}
+	if scoreThreshold <= 0 || scoreThreshold > 100 {
+		scoreThreshold = 60
+	}
+
+	if !h.doubao.IsEnabled() {
+		log.Printf("[AI] 豆包未启用，跳过AI过滤")
+		return companies
+	}
+
+	passed := make([]models.Company, 0, len(companies))
+	for i := range companies {
+		co := companies[i]
+		if strings.TrimSpace(co.Website) == "" {
+			log.Printf("[AI] 跳过无网站公司: %s", co.Name)
+			continue
+		}
+
+		analysis, err := h.doubao.AnalyzeCompany(
+			co.Name,
+			co.Website,
+			co.PageTitle,
+			co.Description,
+			co.BodyText,
+			requirement,
+		)
+		if err != nil {
+			log.Printf("[AI] 分析失败: %s, err=%v", co.Name, err)
+			continue
+		}
+
+		analysisJSON, _ := json.Marshal(analysis)
+		co.CompanyIntro = analysis.CompanyIntro
+		co.AIAnalysis = string(analysisJSON)
+		co.AIScore = analysis.Score
+		co.AIAnalyzed = true
+
+		if analysis.IsRelevant && analysis.Score >= scoreThreshold {
+			co.Filtered = false
+			co.FilterReason = ""
+			passed = append(passed, co)
+			log.Printf("[AI] 通过: %s, score=%d", co.Name, analysis.Score)
+			continue
+		}
+
+		co.Filtered = true
+		co.FilterReason = analysis.Reason
+		log.Printf("[AI] 过滤: %s, score=%d, reason=%s", co.Name, analysis.Score, analysis.Reason)
+	}
+
+	return passed
 }
 
 // SearchRequest 搜索请求
@@ -197,12 +251,16 @@ func (h *SearchHandler) searchByAPI(c *gin.Context, req SearchRequest) {
 		detail, err := h.googleService.GetPlaceDetail(place.PlaceID)
 		if err != nil {
 			company := services.ConvertBasicToCompany(&place, "map")
-			h.upsertCompany(&company)
+			if upsertErr := h.upsertCompany(&company); upsertErr != nil {
+				log.Printf("[API] 写库失败: name=%s place_id=%s err=%v", company.Name, company.PlaceID, upsertErr)
+			}
 			companies = append(companies, company)
 			continue
 		}
 		company := services.ConvertDetailToCompany(detail, "map")
-		h.upsertCompany(&company)
+		if upsertErr := h.upsertCompany(&company); upsertErr != nil {
+			log.Printf("[API] 写库失败: name=%s place_id=%s err=%v", company.Name, company.PlaceID, upsertErr)
+		}
 		companies = append(companies, company)
 	}
 
@@ -242,6 +300,10 @@ func (h *SearchHandler) searchByRod(c *gin.Context, req SearchRequest) {
 
 	if req.MaxCount <= 0 {
 		req.MaxCount = 60
+	}
+	if req.AIRequirement != "" && !h.doubao.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "豆包AI未启用，请先在config.json开启 doubao.enabled 并配置可用API Key"})
+		return
 	}
 
 	// 创建搜索记录（状态：进行中）
@@ -286,12 +348,6 @@ func (h *SearchHandler) searchByRod(c *gin.Context, req SearchRequest) {
 		return
 	}
 
-	// 保存商家到数据库
-	for i := range companies {
-		companies[i].SearchRecordID = record.ID
-		h.upsertCompany(&companies[i])
-	}
-
 	// 自动爬取有网站的商家，提取邮箱/电话/社交链接
 	companies = h.scrapeCompanyWebsites(companies)
 
@@ -300,7 +356,18 @@ func (h *SearchHandler) searchByRod(c *gin.Context, req SearchRequest) {
 		companies = h.analyzeCompaniesWithAI(companies, req.AIRequirement, req.AIScoreThreshold)
 	}
 
-	record.TotalResults = len(companies)
+	// 通过筛选后再入库
+	savedCompanies := make([]models.Company, 0, len(companies))
+	for i := range companies {
+		companies[i].SearchRecordID = record.ID
+		if err := h.upsertCompany(&companies[i]); err != nil {
+			log.Printf("[Rod] 写库失败: name=%s place_id=%s err=%v", companies[i].Name, companies[i].PlaceID, err)
+			continue
+		}
+		savedCompanies = append(savedCompanies, companies[i])
+	}
+
+	record.TotalResults = len(savedCompanies)
 	record.Status = 1
 	h.db.Save(&record)
 
@@ -309,8 +376,8 @@ func (h *SearchHandler) searchByRod(c *gin.Context, req SearchRequest) {
 		"msg":  "success",
 		"data": gin.H{
 			"record":    record,
-			"companies": companies,
-			"total":     len(companies),
+			"companies": savedCompanies,
+			"total":     len(savedCompanies),
 			"mode":      "rod",
 		},
 	})
@@ -351,6 +418,22 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 	if req.Concurrent <= 0 {
 		req.Concurrent = 2
 	}
+	if req.AIRequirement != "" && !h.doubao.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "豆包AI未启用，请先在config.json开启 doubao.enabled 并配置可用API Key"})
+		return
+	}
+
+	// 先创建搜索记录，确保写库时 search_record_id 可用
+	record := models.SearchRecord{
+		Source:  "rod_concurrent",
+		Keyword: req.Keyword,
+		Address: strings.Join(cities, ", "),
+		Status:  0,
+	}
+	if err := h.db.Create(&record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "保存搜索记录失败: " + err.Error()})
+		return
+	}
 
 	log.Printf("[Rod-并发] 开始搜索 %d 个城市, 关键词: %s, 并发数: %d", len(cities), req.Keyword, req.Concurrent)
 
@@ -362,16 +445,7 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 		Concurrent: req.Concurrent,
 	})
 
-	// 先创建搜索记录，确保获得 record.ID
-	record := models.SearchRecord{
-		Source:  "rod_concurrent",
-		Keyword: req.Keyword,
-		Address: strings.Join(cities, ", "),
-		Status:  0,
-	}
-	h.db.Create(&record)
-
-	// 汇总所有公司 + 保存到数据库
+	// 汇总所有公司
 	allCompanies := make([]models.Company, 0)
 	cityResults := make([]gin.H, 0, len(rodResults))
 
@@ -388,17 +462,8 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 			continue
 		}
 
-		// 保存商家到数据库
-		for i := range r.Companies {
-			r.Companies[i].SearchRecordID = record.ID
-			h.upsertCompany(&r.Companies[i])
-		}
 		allCompanies = append(allCompanies, r.Companies...)
 	}
-
-	record.TotalResults = len(allCompanies)
-	record.Status = 1
-	h.db.Save(&record)
 
 	// 自动爬取有网站的商家
 	allCompanies = h.scrapeCompanyWebsites(allCompanies)
@@ -408,15 +473,31 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 		allCompanies = h.analyzeCompaniesWithAI(allCompanies, req.AIRequirement, req.AIScoreThreshold)
 	}
 
-	log.Printf("[Rod-并发] 全部完成: %d 个城市, 共 %d 家商家", len(cities), len(allCompanies))
+	// 通过筛选后再入库
+	savedCompanies := make([]models.Company, 0, len(allCompanies))
+	for i := range allCompanies {
+		allCompanies[i].SearchRecordID = record.ID
+		if err := h.upsertCompany(&allCompanies[i]); err != nil {
+			log.Printf("[Rod-并发] 写库失败: city=%s name=%s place_id=%s err=%v", record.Address, allCompanies[i].Name, allCompanies[i].PlaceID, err)
+			continue
+		}
+		savedCompanies = append(savedCompanies, allCompanies[i])
+	}
+
+	record.TotalResults = len(savedCompanies)
+	record.Status = 1
+	h.db.Save(&record)
+
+	log.Printf("[Rod-并发] 全部完成: %d 个城市, 抓取 %d 家, 入库 %d 家", len(cities), len(allCompanies), len(savedCompanies))
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
 		"data": gin.H{
 			"record":       record,
-			"companies":    allCompanies,
-			"total":        len(allCompanies),
+			"companies":    savedCompanies,
+			"total":        len(savedCompanies),
+			"crawled_total": len(allCompanies),
 			"city_results": cityResults,
 			"mode":         "rod_concurrent",
 		},
@@ -453,12 +534,16 @@ func (h *SearchHandler) SearchNextPage(c *gin.Context) {
 		detail, err := h.googleService.GetPlaceDetail(place.PlaceID)
 		if err != nil {
 			company := services.ConvertBasicToCompany(&place, "map")
-			h.upsertCompany(&company)
+			if upsertErr := h.upsertCompany(&company); upsertErr != nil {
+				log.Printf("[API] 写库失败: name=%s place_id=%s err=%v", company.Name, company.PlaceID, upsertErr)
+			}
 			companies = append(companies, company)
 			continue
 		}
 		company := services.ConvertDetailToCompany(detail, "map")
-		h.upsertCompany(&company)
+		if upsertErr := h.upsertCompany(&company); upsertErr != nil {
+			log.Printf("[API] 写库失败: name=%s place_id=%s err=%v", company.Name, company.PlaceID, upsertErr)
+		}
 		companies = append(companies, company)
 	}
 
@@ -621,23 +706,35 @@ func (h *SearchHandler) DeleteRecord(c *gin.Context) {
 }
 
 // upsertCompany 按 place_id 去重插入或更新公司
-func (h *SearchHandler) upsertCompany(company *models.Company) {
+func (h *SearchHandler) upsertCompany(company *models.Company) error {
 	if company.PlaceID == "" {
-		h.db.Create(company)
-		return
+		if err := h.db.Create(company).Error; err != nil {
+			return err
+		}
+		if company.Email != "" && company.ID > 0 {
+			h.saveCompanyEmails(company.ID, []string{company.Email}, "google")
+		}
+		h.emailService.TrySendMarketingEmail(company)
+		return nil
 	}
 	var existing models.Company
 	err := h.db.Where("place_id = ?", company.PlaceID).First(&existing).Error
 	if err != nil {
-		h.db.Create(company)
+		if createErr := h.db.Create(company).Error; createErr != nil {
+			return createErr
+		}
 	} else {
 		company.ID = existing.ID
-		h.db.Model(&existing).Updates(company)
+		if updateErr := h.db.Model(&existing).Updates(company).Error; updateErr != nil {
+			return updateErr
+		}
 	}
 	// 保存Google Maps上的邮箱到company_emails
-	if company.Email != "" {
+	if company.Email != "" && company.ID > 0 {
 		h.saveCompanyEmails(company.ID, []string{company.Email}, "google")
 	}
+	h.emailService.TrySendMarketingEmail(company)
+	return nil
 }
 
 // AIAnalyze 手动触发AI分析（已禁用）
