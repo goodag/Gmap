@@ -781,7 +781,6 @@
                     </div>
                 </div>
 
-                <!-- AI分析设置（已禁用）
                 <div
                     style="margin-top:12px;padding:10px;background:#f0f7ff;border:1px solid #b3d4fc;border-radius:8px;">
                     <label style="font-weight:600;color:#1a73e8;">🤖 AI智能分析（豆包 Doubao）</label>
@@ -798,7 +797,7 @@
                     <div style="font-size:11px;color:#666;margin-top:4px;">
                         💡 AI分析每个公司网页，评分低于阈值的公司将被过滤不入库（0=不过滤全部保留）
                     </div>
-                </div> -->
+                </div>
 
                 <button class="btn-search" id="btnSearch" onclick="doSearch()">🔍 搜索附近商家</button>
                 <button id="btnStop" onclick="stopSearch()" style="display:none;margin-top:6px;width:100%;padding:8px 12px;border:1px solid #dc3545;border-radius:8px;font-size:13px;background:#dc3545;color:white;cursor:pointer;">
@@ -1230,9 +1229,8 @@
                 keyword: keyword,
                 address: address,
                 mode: currentMode,
-                // AI分析已禁用
-                // ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
-                // ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
+                ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
+                ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
             };
 
             if (currentMode === 'rod') {
@@ -1406,8 +1404,7 @@
             let html = `<div class="results-header"><span class="count">${businesses.length}</span>&nbsp;个商家</div>`;
             businesses.forEach((biz, i) => {
                 const stars = biz.rating ? '⭐' + biz.rating.toFixed(1) : '';
-                // AI分析已禁用
-                // const aiTag = biz.ai_analyzed ? (biz.ai_score >= 60 ? `<span class="scrape-tag" style="background:#e8f5e9;color:#2e7d32;">AI ${biz.ai_score}分</span>` : `<span class="scrape-tag" style="background:#fff3e0;color:#e65100;">AI ${biz.ai_score}分</span>`) : '';
+                const aiTag = biz.ai_analyzed ? (biz.ai_score >= 60 ? `<span class="scrape-tag" style="background:#e8f5e9;color:#2e7d32;">AI ${biz.ai_score}分</span>` : `<span class="scrape-tag" style="background:#fff3e0;color:#e65100;">AI ${biz.ai_score}分</span>`) : '';
                 // 解析所有邮箱
                 let allEmails = [];
                 if (biz.email) allEmails.push(biz.email);
@@ -1415,8 +1412,8 @@
                 allEmails = [...new Set(allEmails)];
                 html += `
                     <div class="biz-card" id="biz-${i}" onclick="selectBiz(${i})" onmouseenter="highlightMarker(${i})" onmouseleave="unhighlightMarker(${i})">
-                        <div class="biz-name">${escHtml(biz.name)}${biz._scraped ? '<span class="scrape-tag scraped">已爬取</span>' : ''}${biz._filtered ? '<span class="scrape-tag filtered">已过滤</span>' : ''}${!biz.website ? '<span class="scrape-tag no-site">无网站</span>' : ''}</div>
-                        <!-- AI分析已禁用 ${biz.company_intro ? `<div style="font-size:12px;color:#1a73e8;margin:2px 0;padding:3px 6px;background:#e8f0fe;border-radius:4px;">📝 ${escHtml(biz.company_intro)}</div>` : ''} -->
+                        <div class="biz-name">${escHtml(biz.name)}${biz._scraped ? '<span class="scrape-tag scraped">已爬取</span>' : ''}${biz._filtered ? '<span class="scrape-tag filtered">已过滤</span>' : ''}${!biz.website ? '<span class="scrape-tag no-site">无网站</span>' : ''}${aiTag}</div>
+                        ${biz.company_intro ? `<div style="font-size:12px;color:#1a73e8;margin:2px 0;padding:3px 6px;background:#e8f0fe;border-radius:4px;">📝 ${escHtml(biz.company_intro)}</div>` : ''}
                         <div class="biz-addr">${escHtml(biz.formatted_address)}</div>
                         <div class="biz-meta">
                             ${stars ? `<span class="rating">${stars} (${biz.user_ratings_total})</span>` : ''}
@@ -1429,7 +1426,7 @@
                             ${biz.website ? `<button onclick="event.stopPropagation();scrapeSingle(${i})">🕷️爬取</button>` : ''}
                             ${allEmails.length > 0 ? `<button class="btn-email" onclick="event.stopPropagation();openEmailModal(${i})">发邮件</button>` : ''}
                             ${biz.phone ? `<button onclick="event.stopPropagation();window.open('tel:${biz.phone}')">拨打</button>` : ''}
-                            <!-- AI分析已禁用 ${biz.ai_analyzed ? `<button onclick="event.stopPropagation();showAIDetail(${i})" style="background:#f3e5f5;color:#7b1fa2;">🤖AI</button>` : ''} -->
+                            ${biz.ai_analyzed ? `<button onclick="event.stopPropagation();showAIDetail(${i})" style="background:#f3e5f5;color:#7b1fa2;">🤖AI</button>` : ''}
                         </div>
                     </div>`;
             });
@@ -1563,33 +1560,25 @@
         }
 
         // AI分析详情弹窗（已禁用）
-        // function showAIDetail(i) {
-        //     const biz = businesses[i];
-        //     let ai = {};
-        //     try { ai = JSON.parse(biz.ai_analysis || '{}'); } catch (e) { }
-        //     const panel = document.getElementById('detailPanel');
-        //     document.getElementById('detailName').textContent = '🤖 AI分析: ' + biz.name;
-        //     let html = '';
-        //     const scoreColor = ai.score >= 60 ? '#2e7d32' : ai.score >= 30 ? '#e65100' : '#c62828';
-        //     html += `<div style="text-align:center;margin:12px 0;"><span style="font-size:36px;font-weight:bold;color:${scoreColor};">${ai.score || 0}</span><span style="color:#666;font-size:14px;">/100 分</span></div>`;
-        //     if (ai.is_relevant !== undefined) {
-        //         html += `<div style="text-align:center;margin-bottom:12px;"><span style="padding:4px 12px;border-radius:12px;font-size:13px;${ai.is_relevant ? 'background:#e8f5e9;color:#2e7d32' : 'background:#fbe9e7;color:#c62828'}">${ai.is_relevant ? '✅ 符合要求' : '❌ 不符合要求'}</span></div>`;
-        //     }
-        //     const aiItems = [
-        //         ['公司简介', ai.company_intro],
-        //         ['主营业务', ai.main_business],
-        //         ['行业分类', ai.industry],
-        //         ['目标市场', ai.target_market],
-        //         ['公司规模', ai.company_size],
-        //         ['判断理由', ai.reason],
-        //         ['关键词', ai.keywords ? ai.keywords.join(', ') : '']
-        //     ];
-        //     aiItems.forEach(([label, value]) => {
-        //         if (value) html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${escHtml(value)}</div></div>`;
-        //     });
-        //     document.getElementById('detailBody').innerHTML = html;
-        //     panel.classList.add('show');
-        // }
+        function showAIDetail(i) {
+            const biz = businesses[i];
+            const panel = document.getElementById('detailPanel');
+            document.getElementById('detailName').textContent = '🤖 AI分析: ' + biz.name;
+            let html = '';
+            const scoreColor = biz.ai_score >= 60 ? '#2e7d32' : biz.ai_score >= 30 ? '#e65100' : '#c62828';
+            html += `<div style="text-align:center;margin:12px 0;"><span style="font-size:36px;font-weight:bold;color:${scoreColor};">${biz.ai_score || 0}</span><span style="color:#666;font-size:14px;">/100 分</span></div>`;
+            html += `<div style="text-align:center;margin-bottom:12px;"><span style="padding:4px 12px;border-radius:12px;font-size:13px;${biz.ai_score >= 30 ? 'background:#e8f5e9;color:#2e7d32' : 'background:#fbe9e7;color:#c62828'}">${biz.ai_score >= 30 ? '✅ 符合要求' : '❌ 不符合要求'}</span></div>`;
+            const aiItems = [
+                ['公司简介', biz.company_intro],
+                ['行业分类', biz.industry],
+                ['判断理由', biz.ai_reason],
+            ];
+            aiItems.forEach(([label, value]) => {
+                if (value) html += `<div class="detail-item"><div class="label">${label}</div><div class="value">${escHtml(value)}</div></div>`;
+            });
+            document.getElementById('detailBody').innerHTML = html;
+            panel.classList.add('show');
+        }
 
         // 邮件弹窗
         function openEmailModal(i) {
