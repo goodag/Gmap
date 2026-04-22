@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"googleMap/models"
@@ -13,6 +15,35 @@ import (
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
+
+// 从社交链接JSON中提取指定平台的链接
+func extractSocialLink(socialLinksJSON string, platform string) string {
+	if socialLinksJSON == "" {
+		return ""
+	}
+	var links []string
+	if err := json.Unmarshal([]byte(socialLinksJSON), &links); err != nil {
+		return ""
+	}
+	for _, link := range links {
+		if strings.Contains(strings.ToLower(link), platform) {
+			return link
+		}
+	}
+	return ""
+}
+
+// 从文本中提取主营产品（简单截取）
+func extractProduct(text string) string {
+	if text == "" {
+		return ""
+	}
+	// 截取前100字作为主营产品描述
+	if len(text) > 100 {
+		return text[:100] + "..."
+	}
+	return text
+}
 
 type ExportHandler struct {
 	db *gorm.DB
@@ -66,6 +97,8 @@ func (h *ExportHandler) ExportAll(c *gin.Context) {
 	keyword := c.Query("keyword")
 	source := c.Query("source")
 
+	log.Printf("[Export] 导出全部商家, keyword=%s, source=%s", keyword, source)
+
 	query := h.db.Model(&models.Company{})
 	if keyword != "" {
 		query = query.Where("name LIKE ? OR formatted_address LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
@@ -76,6 +109,8 @@ func (h *ExportHandler) ExportAll(c *gin.Context) {
 
 	var companies []models.Company
 	query.Order("id DESC").Find(&companies)
+
+	log.Printf("[Export] 查询到 %d 条商家数据", len(companies))
 
 	// 查所有邮箱
 	companyIDs := make([]uint64, len(companies))
@@ -140,29 +175,16 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 		},
 	})
 
-	// 表头
-	headers := []string{"序号", "公司名称", "地址", "电话", "邮箱", "网站", "评分", "评价数", "公司简介", "AI评分", "来源"}
-	colWidths := []float64{8, 30, 40, 20, 35, 30, 8, 10, 50, 10, 10}
+	// 表头（按用户需求顺序）
+	headers := []string{"序号", "公司名称", "地址", "电话", "官网", "邮箱", "评分", "Facebook", "Instagram", "行业", "来源", "业务简介", "主营产品"}
+	colWidths := []float64{8, 30, 40, 20, 40, 35, 8, 40, 40, 30, 15, 50, 50}
 
-	for i, h := range headers {
+	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue(sheet, cell, h)
+		f.SetCellValue(sheet, cell, header)
 		f.SetCellStyle(sheet, cell, cell, headerStyle)
 		f.SetColWidth(sheet, string(rune('A'+i)), string(rune('A'+i)), colWidths[i])
 	}
-
-	// 列宽（超过J列的特殊处理）
-	f.SetColWidth(sheet, "A", "A", colWidths[0])
-	f.SetColWidth(sheet, "B", "B", colWidths[1])
-	f.SetColWidth(sheet, "C", "C", colWidths[2])
-	f.SetColWidth(sheet, "D", "D", colWidths[3])
-	f.SetColWidth(sheet, "E", "E", colWidths[4])
-	f.SetColWidth(sheet, "F", "F", colWidths[5])
-	f.SetColWidth(sheet, "G", "G", colWidths[6])
-	f.SetColWidth(sheet, "H", "H", colWidths[7])
-	f.SetColWidth(sheet, "I", "I", colWidths[8])
-	f.SetColWidth(sheet, "J", "J", colWidths[9])
-	f.SetColWidth(sheet, "K", "K", colWidths[10])
 
 	// 数据行
 	for i, co := range companies {
@@ -176,40 +198,67 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 			emails = co.Email
 		}
 
-		// 来源
+		// 来源映射
 		source := co.Source
 		switch source {
-		case "google_api":
-			source = "Google API"
+		case "google_api", "map":
+			source = "google_map"
 		case "rod":
-			source = "Rod爬取"
+			source = "google_map"
 		case "google_search":
-			source = "谷歌搜索"
+			source = "google_search"
 		}
 
+		// 提取社交链接
+		facebook := extractSocialLink(co.SocialLinks, "facebook")
+		instagram := extractSocialLink(co.SocialLinks, "instagram")
+
+		// 主营产品（从简介或正文提取）
+		product := extractProduct(co.CompanyIntro)
+		if product == "" {
+			product = extractProduct(co.BodyText)
+		}
+
+		// 设置单元格值
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), i+1)
 		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), co.Name)
 		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), co.FormattedAddress)
 		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), co.Phone)
-		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), emails)
-
-		// 网站设为超链接
+		
+		// 官网设为超链接
 		if co.Website != "" {
-			f.SetCellValue(sheet, fmt.Sprintf("F%d", row), co.Website)
-			f.SetCellHyperLink(sheet, fmt.Sprintf("F%d", row), co.Website, "External")
-			f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), linkStyle)
+			f.SetCellValue(sheet, fmt.Sprintf("E%d", row), co.Website)
+			f.SetCellHyperLink(sheet, fmt.Sprintf("E%d", row), co.Website, "External")
+			f.SetCellStyle(sheet, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), linkStyle)
 		}
-
+		
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), emails)
 		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), co.Rating)
-		f.SetCellValue(sheet, fmt.Sprintf("H%d", row), co.UserRatingsTotal)
-		f.SetCellValue(sheet, fmt.Sprintf("I%d", row), co.CompanyIntro)
-		f.SetCellValue(sheet, fmt.Sprintf("J%d", row), co.AIScore)
+		
+		// Facebook设为超链接
+		if facebook != "" {
+			f.SetCellValue(sheet, fmt.Sprintf("H%d", row), facebook)
+			f.SetCellHyperLink(sheet, fmt.Sprintf("H%d", row), facebook, "External")
+			f.SetCellStyle(sheet, fmt.Sprintf("H%d", row), fmt.Sprintf("H%d", row), linkStyle)
+		}
+		
+		// Instagram设为超链接
+		if instagram != "" {
+			f.SetCellValue(sheet, fmt.Sprintf("I%d", row), instagram)
+			f.SetCellHyperLink(sheet, fmt.Sprintf("I%d", row), instagram, "External")
+			f.SetCellStyle(sheet, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), linkStyle)
+		}
+		
+		f.SetCellValue(sheet, fmt.Sprintf("J%d", row), co.Types)
 		f.SetCellValue(sheet, fmt.Sprintf("K%d", row), source)
+		f.SetCellValue(sheet, fmt.Sprintf("L%d", row), co.CompanyIntro)
+		f.SetCellValue(sheet, fmt.Sprintf("M%d", row), product)
 
 		// 设置数据样式
-		for col := 1; col <= 11; col++ {
+		for col := 1; col <= 13; col++ {
 			cell, _ := excelize.CoordinatesToCellName(col, row)
-			if col != 6 || co.Website == "" { // 网站列单独设了链接样式
+			// 网站、Facebook、Instagram列单独设了链接样式
+			if col != 5 && col != 8 && col != 9 {
 				f.SetCellStyle(sheet, cell, cell, dataStyle)
 			}
 		}
@@ -226,7 +275,7 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 	})
 
 	// 自动筛选
-	lastCell, _ := excelize.CoordinatesToCellName(11, len(companies)+1)
+	lastCell, _ := excelize.CoordinatesToCellName(13, len(companies)+1)
 	f.AutoFilter(sheet, "A1:"+lastCell, nil)
 
 	log.Printf("[Export] 导出 %s: %d 条商家数据", sheetTitle, len(companies))
@@ -241,6 +290,8 @@ func (h *ExportHandler) sendExcel(c *gin.Context, f *excelize.File, filename str
 
 	if err := f.Write(c.Writer); err != nil {
 		log.Printf("[Export] 写入Excel失败: %v", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
 	}
 	f.Close()
 }

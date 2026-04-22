@@ -17,15 +17,15 @@ import (
 
 // SchedulerService 定时任务调度器
 type SchedulerService struct {
-	db            *gorm.DB
-	googleSvc     *GoogleService
-	googleSearch  *GoogleSearchService
-	scraperSvc    *ScraperService
-	filterSvc     *ContentFilter
-	rodSvc        *RodMapsService
-	stopChans     map[uint64]chan struct{} // taskID -> stopChan
-	mu            sync.Mutex
-	running       bool
+	db           *gorm.DB
+	googleSvc    *GoogleService
+	googleSearch *GoogleSearchService
+	scraperSvc   *ScraperService
+	filterSvc    *ContentFilter
+	rodSvc       *RodMapsService
+	stopChans    map[uint64]chan struct{} // taskID -> stopChan
+	mu           sync.Mutex
+	running      bool
 }
 
 // MapTaskParams 地图搜索任务参数
@@ -39,11 +39,9 @@ type MapTaskParams struct {
 
 // GoogleTaskParams 谷歌搜索任务参数
 type GoogleTaskParams struct {
-	Query    string        `json:"query"`
-	Location string        `json:"location"`
-	Language string        `json:"language"`
-	Pages    int           `json:"pages"`
-	Filter   *FilterConfig `json:"filter,omitempty"`
+	Query  string        `json:"query"`
+	Pages  int           `json:"pages"`
+	Filter *FilterConfig `json:"filter,omitempty"`
 }
 
 func NewSchedulerService(db *gorm.DB) *SchedulerService {
@@ -282,22 +280,18 @@ func (s *SchedulerService) executeGoogleTask(task models.CronTask) string {
 
 	// 创建搜索记录
 	record := models.SearchRecord{
-		Source:   "google",
-		Keyword:  params.Query,
-		Location: params.Location,
-		Language: params.Language,
-		Pages:    params.Pages,
-		Status:   0,
+		Source:  "google",
+		Keyword: params.Query,
+		Pages:   params.Pages,
+		Status:  0,
 	}
 	s.db.Create(&record)
 
 	// 执行搜索+爬取
 	req := &SearchAndScrapeRequest{
-		Query:    params.Query,
-		Location: params.Location,
-		Language: params.Language,
-		Pages:    params.Pages,
-		Filter:   params.Filter,
+		Query:  params.Query,
+		Pages:  params.Pages,
+		Filter: params.Filter,
 	}
 	results, err := s.googleSearch.RunSearchAndScrape(req, nil)
 	if err != nil {

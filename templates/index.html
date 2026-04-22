@@ -1343,11 +1343,29 @@
                 statusDiv.style.background = '#fff3cd';
                 statusDiv.style.color = '#856404';
                 statusDiv.style.borderColor = '#ffeeba';
+                // 保存状态到 localStorage
+                localStorage.setItem('searchStatus', 'running');
+                localStorage.setItem('searchTaskId', Date.now().toString());
             } else {
                 statusDiv.innerHTML = '✅ 已完成';
                 statusDiv.style.background = '#e8f5e9';
                 statusDiv.style.color = '#155724';
                 statusDiv.style.borderColor = '#c3e6cb';
+                // 清除 localStorage 中的状态
+                localStorage.removeItem('searchStatus');
+                localStorage.removeItem('searchTaskId');
+            }
+        }
+
+        // 初始化搜索状态（页面加载时调用）
+        function initSearchStatus() {
+            const savedStatus = localStorage.getItem('searchStatus');
+            const savedTaskId = localStorage.getItem('searchTaskId');
+            
+            if (savedStatus === 'running' && savedTaskId) {
+                // 恢复进行中状态
+                updateSearchStatus('running');
+                document.getElementById('btnStop').style.display = 'block';
             }
         }
 
@@ -1777,6 +1795,7 @@
         // 页面加载完成后初始化城市数据
         document.addEventListener('DOMContentLoaded', () => {
             initCitiesData();
+            initSearchStatus();
         });
     </script>
 

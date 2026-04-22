@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,23 +17,23 @@ func NewCityHandler() *CityHandler {
 }
 
 type Continent struct {
-	Name      string     `json:"name"`
-	NameEn    string     `json:"name_en"`
+	Name      string    `json:"name"`
+	NameEn    string    `json:"name_en"`
 	Countries []Country `json:"countries"`
 }
 
 type Country struct {
-	Name    string  `json:"name"`
-	NameEn  string  `json:"name_en"`
-	Code    string  `json:"code"`
-	Cities  []City  `json:"cities"`
+	Name   string `json:"name"`
+	NameEn string `json:"name_en"`
+	Code   string `json:"code"`
+	Cities []City `json:"cities"`
 }
 
 type City struct {
-	Name    string  `json:"name"`
-	NameEn  string  `json:"name_en"`
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
+	Name   string  `json:"name"`
+	NameEn string  `json:"name_en"`
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
 }
 
 type CitiesData struct {
@@ -55,25 +56,8 @@ func (h *CityHandler) GetContinents(c *gin.Context) {
 
 	log.Printf("Successfully loaded %d continents", len(data.Continents))
 
-	// 返回仅包含洲和国家的数据（不带城市详情）
-	result := make([]gin.H, 0)
-	for _, continent := range data.Continents {
-		countries := make([]gin.H, 0)
-		for _, country := range continent.Countries {
-			countries = append(countries, gin.H{
-				"name":    country.Name,
-				"name_en": country.NameEn,
-				"code":    country.Code,
-			})
-		}
-		result = append(result, gin.H{
-			"name":      continent.Name,
-			"name_en":   continent.NameEn,
-			"countries": countries,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "data": result})
+	// 返回完整的洲、国家和城市数据
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": data.Continents})
 }
 
 func (h *CityHandler) GetCitiesByCountry(c *gin.Context) {
@@ -102,17 +86,49 @@ func (h *CityHandler) GetCitiesByCountry(c *gin.Context) {
 }
 
 func loadCitiesData() (*CitiesData, error) {
-	// 尝试多个可能的路径
+	// 获取当前执行文件所在目录
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("Error getting executable path: %v", err)
+	} else {
+		log.Printf("Executable path: %s", exePath)
+	}
+
+	// 获取工作目录
+	workDir, err := os.Getwd()
+	if err != nil {
+		log.Printf("Error getting working directory: %v", err)
+	} else {
+		log.Printf("Working directory: %s", workDir)
+	}
+
+	// 获取可执行文件所在目录
+	var exeDir string
+	if exePath != "" {
+		exeDir = filepath.Dir(exePath)
+		log.Printf("Executable directory: %s", exeDir)
+	}
+
+	// 尝试多个可能的路径（优先根目录下的 cities.json）
 	paths := []string{
+		"cities.json",
+		"./cities.json",
+		workDir + "/cities.json",
+		exeDir + "/cities.json",
 		"config/cities.json",
 		"./config/cities.json",
 		"../config/cities.json",
+		"../../config/cities.json",
+		workDir + "/config/cities.json",
+		"/app/config/cities.json",
+		"/opt/googleMap/config/cities.json",
 	}
 
 	var data CitiesData
 	for _, path := range paths {
 		f, err := os.Open(path)
 		if err != nil {
+			log.Printf("Trying path: %s - not found", path)
 			continue
 		}
 		defer f.Close()
@@ -120,8 +136,10 @@ func loadCitiesData() (*CitiesData, error) {
 		if err := json.NewDecoder(f).Decode(&data); err != nil {
 			return nil, err
 		}
+		log.Printf("Successfully loaded cities data from: %s", path)
 		return &data, nil
 	}
 
+	log.Println("All paths failed, cities.json not found")
 	return nil, os.ErrNotExist
 }

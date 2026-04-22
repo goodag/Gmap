@@ -24,33 +24,40 @@ import (
 
 // RodMapsService 使用无头浏览器直接爬取 Google Maps
 type RodMapsService struct {
-	proxyAddr   string
-	chromePath  string
-	stopFlag    bool
+	proxyAddr  string
+	chromePath string
+	stopFlag   bool
+	mu         sync.Mutex
 }
 
 func NewRodMapsService() *RodMapsService {
 	cfg := config.Get()
 	return &RodMapsService{
-		proxyAddr:   cfg.Proxy.Address,
-		chromePath:  cfg.Proxy.ChromePath,
-		stopFlag:    false,
+		proxyAddr:  cfg.Proxy.Address,
+		chromePath: cfg.Proxy.ChromePath,
+		stopFlag:   false,
 	}
 }
 
 // Stop 停止所有正在进行的搜索任务
 func (s *RodMapsService) Stop() {
+	s.mu.Lock()
 	s.stopFlag = true
+	s.mu.Unlock()
 	log.Println("[Rod] 收到停止信号，将停止所有搜索任务")
 }
 
 // ResetStopFlag 重置停止标志
 func (s *RodMapsService) ResetStopFlag() {
+	s.mu.Lock()
 	s.stopFlag = false
+	s.mu.Unlock()
 }
 
 // ShouldStop 检查是否应该停止
 func (s *RodMapsService) ShouldStop() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.stopFlag
 }
 
@@ -173,6 +180,12 @@ func (s *RodMapsService) SearchNearby(req RodSearchRequest) ([]models.Company, e
 	deadline := time.Now().Add(3 * time.Minute)
 	companies := make([]models.Company, 0, len(businesses))
 	for i, biz := range businesses {
+		// 检查是否需要停止
+		if s.ShouldStop() {
+			log.Printf("[Rod] 收到停止信号，停止获取详情，已完成 %d/%d", i, len(businesses))
+			break
+		}
+
 		if time.Now().After(deadline) {
 			log.Printf("[Rod] 详情获取超时，已完成 %d/%d", i, len(businesses))
 			break
@@ -191,7 +204,7 @@ func (s *RodMapsService) SearchNearby(req RodSearchRequest) ([]models.Company, e
 func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurrentResult {
 	// 重置停止标志
 	s.ResetStopFlag()
-	
+
 	if req.Concurrent <= 0 {
 		req.Concurrent = 2
 	}
@@ -216,14 +229,14 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 		wg.Add(1)
 		go func(idx int, cityName string) {
 			defer wg.Done()
-			
+
 			// 检查是否已停止
 			if s.ShouldStop() {
 				log.Printf("[Rod-并发] 任务已停止，跳过城市: %s", cityName)
 				results[idx] = RodConcurrentResult{City: cityName, Error: "任务已停止"}
 				return
 			}
-			
+
 			sem <- struct{}{}        // 获取信号量
 			defer func() { <-sem }() // 释放信号量
 
@@ -517,6 +530,12 @@ func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBus
 	noNewCount := 0
 
 	for i := 0; i < 30; i++ { // 最多滚动30次
+		// 检查是否需要停止
+		if s.ShouldStop() {
+			log.Printf("[Rod] 收到停止信号，停止滚动收集，已收集 %d 个商家", len(results))
+			break
+		}
+
 		// 提取当前可见的商家
 		newItems := s.extractListItems(page)
 		addedAny := false
