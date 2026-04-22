@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"googleMap/models"
+	"googleMap/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
@@ -46,11 +47,45 @@ func extractProduct(text string) string {
 }
 
 type ExportHandler struct {
-	db *gorm.DB
+	db           *gorm.DB
+	emailService *services.EmailService
 }
 
 func NewExportHandler(db *gorm.DB) *ExportHandler {
-	return &ExportHandler{db: db}
+	return &ExportHandler{db: db, emailService: services.NewEmailService(db)}
+}
+
+// SendEmailsByRecord 按搜索记录给其下公司批量发送营销邮件
+func (h *ExportHandler) SendEmailsByRecord(c *gin.Context) {
+	recordID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效ID"})
+		return
+	}
+
+	var record models.SearchRecord
+	if err := h.db.First(&record, recordID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "记录不存在"})
+		return
+	}
+
+	total, sent, failed, skipped, err := h.emailService.SendMarketingByRecord(recordID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"msg":  "发送完成",
+		"data": gin.H{
+			"record_id": recordID,
+			"total":     total,
+			"sent":      sent,
+			"failed":    failed,
+			"skipped":   skipped,
+		},
+	})
 }
 
 // ExportByRecord 按搜索记录导出商家数据为Excel

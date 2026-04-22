@@ -151,6 +151,7 @@ func main() {
 		if exportHandler != nil {
 			// 导出Excel
 			api.GET("/export/record/:id", exportHandler.ExportByRecord)
+			api.POST("/export/record/:id/send-email", exportHandler.SendEmailsByRecord)
 			api.GET("/export/all", exportHandler.ExportAll)
 		}
 

@@ -349,7 +349,8 @@
                 <div class="card-header">
                     <h3>搜索历史记录</h3>
                     <div style="display:flex;gap:8px">
-                        <button class="btn" style="background:#4CAF50;color:#fff" onclick="exportAll()">📥 导出全部商家</button>
+                        <button class="btn" style="background:#4CAF50;color:#fff" onclick="exportAll()">📥
+                            导出全部商家</button>
                         <button class="btn btn-primary" onclick="loadRecords(1)">🔄 刷新</button>
                     </div>
                 </div>
@@ -449,6 +450,7 @@
                         <td style="font-size:12px">${formatTime(r.created_at)}</td>
                         <td>
                             <button class="btn" style="background:#4CAF50;color:#fff" onclick="exportRecord(${r.id})">📥 导出</button>
+                            <button class="btn" style="background:#1a73e8;color:#fff" onclick="sendRecordEmails(${r.id})">✉️ 发送邮件</button>
                             <button class="btn" onclick="toggleExpand(${r.id}, this)">查看商家</button>
                             <button class="btn btn-danger" onclick="deleteRecord(${r.id})">删除</button>
                         </td>
@@ -533,6 +535,25 @@
 
         function exportRecord(id) {
             window.open(`/api/export/record/${id}`, '_blank');
+        }
+
+        async function sendRecordEmails(id) {
+            if (!confirm('按当前记录给其下公司批量发送营销邮件？')) return;
+            try {
+                const resp = await fetch(`/api/export/record/${id}/send-email`, {
+                    method: 'POST'
+                });
+                const data = await resp.json();
+                if (data.code !== 0) {
+                    alert('发送失败: ' + (data.msg || '未知错误'));
+                    return;
+                }
+                const d = data.data || {};
+                alert(`发送完成\n总公司: ${d.total || 0}\n成功: ${d.sent || 0}\n失败: ${d.failed || 0}\n跳过: ${d.skipped || 0}`);
+                loadEmails();
+            } catch (err) {
+                alert('发送请求失败');
+            }
         }
 
         function exportAll() {

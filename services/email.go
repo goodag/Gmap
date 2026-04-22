@@ -29,6 +29,34 @@ func NewEmailService(db *gorm.DB) *EmailService {
 	}
 }
 
+// SendMarketingByRecord 按搜索记录批量发送营销邮件（手动触发）
+func (s *EmailService) SendMarketingByRecord(recordID uint64) (total int, sent int, failed int, skipped int, err error) {
+	var companies []models.Company
+	if err = s.db.Where("search_record_id = ?", recordID).Find(&companies).Error; err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("查询记录下公司失败: %w", err)
+	}
+
+	total = len(companies)
+	for i := range companies {
+		ok, skipReason, sendErr := s.dispatchMarketingEmail(&companies[i])
+		if skipReason != "" {
+			skipped++
+			log.Printf("[EmailManual] 跳过 company=%s reason=%s", companies[i].Name, skipReason)
+			continue
+		}
+		if sendErr != nil {
+			failed++
+			log.Printf("[EmailManual] 发送失败 company=%s err=%v", companies[i].Name, sendErr)
+			continue
+		}
+		if ok {
+			sent++
+		}
+	}
+
+	return total, sent, failed, skipped, nil
+}
+
 // TrySendMarketingEmail 自动发送营销邮件（由配置开关控制）
 func (s *EmailService) TrySendMarketingEmail(company *models.Company) {
 	if company == nil {
@@ -38,19 +66,36 @@ func (s *EmailService) TrySendMarketingEmail(company *models.Company) {
 		return
 	}
 
+	ok, skipReason, err := s.dispatchMarketingEmail(company)
+	if skipReason != "" {
+		log.Printf("[EmailAuto] 跳过 company=%s reason=%s", company.Name, skipReason)
+		return
+	}
+	if err != nil {
+		log.Printf("[EmailAuto] 发送失败 company=%s err=%v", company.Name, err)
+		return
+	}
+	if ok {
+		log.Printf("[EmailAuto] 发送成功 company=%s", company.Name)
+	}
+}
+
+func (s *EmailService) dispatchMarketingEmail(company *models.Company) (ok bool, skipReason string, err error) {
+	if company == nil {
+		return false, "company为空", nil
+	}
+
 	recipient := strings.TrimSpace(company.Email)
 	if s.conf.TestMode {
 		testRecipient := strings.TrimSpace(s.conf.TestRecipient)
 		if testRecipient == "" {
-			log.Printf("[EmailAuto] 测试模式已开启但未配置 test_recipient，跳过: %s", company.Name)
-			return
+			return false, "测试模式未配置test_recipient", nil
 		}
 		recipient = testRecipient
 	}
 
 	if recipient == "" {
-		log.Printf("[EmailAuto] 无可用收件人，跳过: %s", company.Name)
-		return
+		return false, "无可用收件人", nil
 	}
 
 	subject := strings.TrimSpace(s.conf.MarketingSubject)
@@ -60,16 +105,14 @@ func (s *EmailService) TrySendMarketingEmail(company *models.Company) {
 
 	body := s.buildMarketingBody(company)
 	if body == "" {
-		log.Printf("[EmailAuto] 邮件内容为空，跳过: %s", company.Name)
-		return
+		return false, "邮件内容为空", nil
 	}
 
 	if err := s.SendEmail(company.ID, recipient, subject, body, s.conf.CooldownMinutes); err != nil {
-		log.Printf("[EmailAuto] 发送失败 company=%s recipient=%s err=%v", company.Name, recipient, err)
-		return
+		return false, "", err
 	}
 
-	log.Printf("[EmailAuto] 发送成功 company=%s recipient=%s", company.Name, recipient)
+	return true, "", nil
 }
 
 func (s *EmailService) buildMarketingBody(company *models.Company) string {

@@ -20,7 +20,7 @@
         "password": "edxrwmxlludobifi",
         "from_name": "商家搜索系统",
         "useSsl": true,
-        "auto_send_enabled": true,
+        "auto_send_enabled": false,
         "test_mode": true,
         "test_recipient": "962280751@qq.com",
         "cooldown_minutes": 1,
