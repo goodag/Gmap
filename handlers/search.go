@@ -425,10 +425,14 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 
 	// 先创建搜索记录，确保写库时 search_record_id 可用
 	record := models.SearchRecord{
-		Source:  "rod_concurrent",
-		Keyword: req.Keyword,
-		Address: strings.Join(cities, ", "),
-		Status:  0,
+		Source:       "rod_concurrent",
+		Keyword:      req.Keyword,
+		Address:      strings.Join(cities, ", "),
+		Status:       0,
+		TotalCities:  len(cities),
+		CurrentCity:  cities[0],
+		CurrentIndex: 0,
+		FetchedCount: 0,
 	}
 	if err := h.db.Create(&record).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "保存搜索记录失败: " + err.Error()})
@@ -437,12 +441,15 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 
 	log.Printf("[Rod-并发] 开始搜索 %d 个城市, 关键词: %s, 并发数: %d", len(cities), req.Keyword, req.Concurrent)
 
-	// 调用并发搜索
+	// 调用并发搜索（带进度回调）
 	rodResults := h.rodService.ConcurrentSearch(services.RodConcurrentRequest{
 		Keyword:    req.Keyword,
 		Cities:     cities,
 		MaxCount:   req.MaxCount,
 		Concurrent: req.Concurrent,
+		OnProgress: func(city string, index, total, fetchedCount int) {
+			h.updateProgress(record.ID, city, index+1, total, fetchedCount)
+		},
 	})
 
 	// 汇总所有公司
@@ -494,23 +501,67 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 		"code": 0,
 		"msg":  "success",
 		"data": gin.H{
-			"record":       record,
-			"companies":    savedCompanies,
-			"total":        len(savedCompanies),
+			"record":        record,
+			"companies":     savedCompanies,
+			"total":         len(savedCompanies),
 			"crawled_total": len(allCompanies),
-			"city_results": cityResults,
-			"mode":         "rod_concurrent",
+			"city_results":  cityResults,
+			"mode":          "rod_concurrent",
 		},
 	})
 }
 
-// SearchNextPage 搜索下一页
 // StopSearch 停止所有正在进行的搜索任务
 func (h *SearchHandler) StopSearch(c *gin.Context) {
 	if h.rodService != nil {
 		h.rodService.Stop()
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已发送停止信号"})
+}
+
+// GetTaskProgress 获取任务进度
+func (h *SearchHandler) GetTaskProgress(c *gin.Context) {
+	// 查询最近的进行中的任务
+	var record models.SearchRecord
+	err := h.db.Where("status = ? AND source IN (?, ?, ?)", 0, "rod", "rod_concurrent", "map").
+		Order("created_at DESC").First(&record).Error
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"data": gin.H{
+				"running": false,
+				"message": "没有正在进行的任务",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": gin.H{
+			"running":       true,
+			"record_id":     record.ID,
+			"keyword":       record.Keyword,
+			"address":       record.Address,
+			"current_city":  record.CurrentCity,
+			"current_index": record.CurrentIndex,
+			"total_cities":  record.TotalCities,
+			"fetched_count": record.FetchedCount,
+			"status":        record.Status,
+			"source":        record.Source,
+		},
+	})
+}
+
+// updateProgress 更新任务进度
+func (h *SearchHandler) updateProgress(recordID uint64, currentCity string, currentIndex, totalCities, fetchedCount int) {
+	h.db.Model(&models.SearchRecord{}).Where("id = ?", recordID).Updates(map[string]interface{}{
+		"current_city":  currentCity,
+		"current_index": currentIndex,
+		"total_cities":  totalCities,
+		"fetched_count": fetchedCount,
+	})
 }
 
 func (h *SearchHandler) SearchNextPage(c *gin.Context) {

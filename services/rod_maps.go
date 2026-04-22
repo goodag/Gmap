@@ -73,10 +73,11 @@ type RodSearchRequest struct {
 
 // RodConcurrentRequest 并发搜索请求
 type RodConcurrentRequest struct {
-	Keyword    string   `json:"keyword"`
-	Cities     []string `json:"cities"`     // 多个城市
-	MaxCount   int      `json:"max_count"`  // 每个城市最大数量
-	Concurrent int      `json:"concurrent"` // 并发数（同时开几个浏览器）
+	Keyword    string                                            `json:"keyword"`
+	Cities     []string                                          `json:"cities"`     // 多个城市
+	MaxCount   int                                               `json:"max_count"`  // 每个城市最大数量
+	Concurrent int                                               `json:"concurrent"` // 并发数（同时开几个浏览器）
+	OnProgress func(city string, index, total, fetchedCount int) // 进度回调函数
 }
 
 // RodConcurrentResult 单个城市的搜索结果
@@ -216,6 +217,8 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 	}
 
 	results := make([]RodConcurrentResult, len(req.Cities))
+	totalFetched := 0
+	progressLock := sync.Mutex{}
 
 	// 并发任务开始前先做一次浏览器预检查，避免每个城市都重复等待失败
 	if err := s.EnsureBrowser(); err != nil {
@@ -285,6 +288,14 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 			}
 
 			results[idx] = result
+
+			// 更新进度
+			progressLock.Lock()
+			totalFetched += len(result.Companies)
+			if req.OnProgress != nil {
+				req.OnProgress(cityName, idx, len(req.Cities), totalFetched)
+			}
+			progressLock.Unlock()
 		}(i, city)
 	}
 
