@@ -14,11 +14,12 @@
         "custom_search_id": "YOUR_CUSTOM_SEARCH_ENGINE_ID"
     },
     "email": {
-        "smtp_host": "smtp.gmail.com",
-        "smtp_port": 587,
-        "username": "your-email@gmail.com",
-        "password": "your-app-password",
-        "from_name": "商家搜索系统"
+        "smtp_host": "smtp.qq.com",
+        "smtp_port": 465,
+        "username": "530784848@qq.com",
+        "password": "edxrwmxlludobifi",
+        "from_name": "商家搜索系统",
+        "useSsl": true
     },
     "proxy": {
         "enabled": true,
