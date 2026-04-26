@@ -550,18 +550,20 @@ func (s *RodMapsService) dismissDialogs(page *rod.Page) {
 func (s *RodMapsService) waitForResults(page *rod.Page) error {
 	// Google Maps 搜索结果的多种可能选择器
 	selectors := []string{
-		"div[role='feed']",                // 搜索结果列表容器
-		"div.Nv2PK",                       // 商家卡片
-		"a[href*='/maps/place/']",         // 商家链接
-		"div.m6QErb.DxyBCb",               // 侧边栏滚动容器
-		"div[aria-label*='Results']",      // 搜索结果区域
-		"div[aria-label*='results']",      // 搜索结果（小写）
-		"div.qjESne",                      // 搜索结果项
-		"div[jsaction*='mouseover:pane']", // 面板区域
+		"div[role='feed']",           // 搜索结果列表容器
+		"div.Nv2PK",                  // 商家卡片
+		"a[href*='/maps/place/']",    // 商家链接
+		"div.m6QErb.DxyBCb",          // 侧边栏滚动容器
+		"div[aria-label*='Results']", // 搜索结果区域
+		"div[aria-label*='results']", // 搜索结果（小写）
+		"div.qjESne",                 // 搜索结果项
 	}
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < 2; attempt++ {
+		if s.hasNoResultsMessage(page) {
+			return fmt.Errorf("搜索无结果")
+		}
 		for _, sel := range selectors {
-			el, err := page.Timeout(5 * time.Second).Element(sel)
+			el, err := page.Timeout(3 * time.Second).Element(sel)
 			if err == nil && el != nil {
 				log.Printf("[Rod] 找到结果容器: %s", sel)
 				return nil
@@ -569,9 +571,36 @@ func (s *RodMapsService) waitForResults(page *rod.Page) error {
 		}
 		// 没找到，可能页面还在加载，等待后重试
 		log.Printf("[Rod] 第 %d 次未找到结果，等待重试...", attempt+1)
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	return fmt.Errorf("未找到搜索结果列表")
+}
+
+// hasNoResultsMessage 检查页面是否出现明确的无结果提示
+func (s *RodMapsService) hasNoResultsMessage(page *rod.Page) bool {
+	body, err := page.Timeout(1200 * time.Millisecond).Element("body")
+	if err != nil || body == nil {
+		return false
+	}
+	text, err := body.Text()
+	if err != nil {
+		return false
+	}
+	text = strings.ToLower(text)
+	keywords := []string{
+		"no results found",
+		"did not match any locations",
+		"找不到结果",
+		"未找到结果",
+		"没有找到",
+	}
+	for _, kw := range keywords {
+		if strings.Contains(text, kw) {
+			log.Printf("[Rod] 检测到无结果提示: %s", kw)
+			return true
+		}
+	}
+	return false
 }
 
 // scrollAndCollect 滚动搜索结果并收集商家基本信息
@@ -580,7 +609,12 @@ func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBus
 	seenNames := make(map[string]bool)
 	noNewCount := 0
 
-	for i := 0; i < 30; i++ { // 最多滚动30次
+	if s.hasNoResultsMessage(page) {
+		log.Printf("[Rod] 页面明确提示无结果，快速结束收集")
+		return results
+	}
+
+	for i := 0; i < 12; i++ { // 最多滚动12次，避免无结果场景长时间等待
 		// 检查是否需要停止
 		if s.ShouldStop() {
 			log.Printf("[Rod] 收到停止信号，停止滚动收集，已收集 %d 个商家", len(results))
@@ -605,8 +639,8 @@ func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBus
 
 		if !addedAny {
 			noNewCount++
-			if noNewCount >= 3 {
-				break // 连续3次没有新数据，说明到底了
+			if noNewCount >= 2 {
+				break // 连续2次没有新数据，说明到底了
 			}
 		} else {
 			noNewCount = 0
@@ -614,7 +648,7 @@ func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBus
 
 		// 滚动搜索结果面板
 		s.scrollResultsPanel(page)
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	if len(results) > maxCount {
@@ -899,7 +933,7 @@ func (s *RodMapsService) scrollResultsPanel(page *rod.Page) {
 		`.m6QErb`,
 	}
 	for _, sel := range feedSelectors {
-		el, err := page.Element(sel)
+		el, err := page.Timeout(1200 * time.Millisecond).Element(sel)
 		if err == nil {
 			// 使用 Mouse wheel 模拟滚动
 			box, err := el.Shape()
