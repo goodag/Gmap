@@ -9,7 +9,7 @@ type SearchRecord struct {
 	Keyword      string    `gorm:"size:255;not null;default:''" json:"keyword"`
 	Latitude     float64   `gorm:"type:decimal(10,7);not null;default:0" json:"latitude"`
 	Longitude    float64   `gorm:"type:decimal(10,7);not null;default:0" json:"longitude"`
-	Radius       int       `gorm:"not null;default:5000" json:"radius"`
+	Radius       int       `gorm:"not null;default:50000" json:"radius"`
 	Address      string    `gorm:"size:500;not null;default:''" json:"address"`
 	Location     string    `gorm:"size:255;not null;default:''" json:"location"` // 谷歌搜索的地区限制
 	Language     string    `gorm:"size:20;not null;default:''" json:"language"`

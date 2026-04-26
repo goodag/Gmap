@@ -207,7 +207,7 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 	s.ResetStopFlag()
 
 	if req.Concurrent <= 0 {
-		req.Concurrent = 2
+		req.Concurrent = 1
 	}
 	if req.Concurrent > 5 {
 		req.Concurrent = 5 // 最多5个并发，避免资源耗尽

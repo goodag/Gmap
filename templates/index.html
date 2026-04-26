@@ -677,10 +677,10 @@
                     <div class="radius-options">
                         <button class="radius-btn" data-radius="1000">1km</button>
                         <button class="radius-btn" data-radius="3000">3km</button>
-                        <button class="radius-btn active" data-radius="5000">5km</button>
+                        <button class="radius-btn active" data-radius="50000">50km</button>
                         <button class="radius-btn" data-radius="10000">10km</button>
                         <button class="radius-btn" data-radius="20000">20km</button>
-                        <button class="radius-btn" data-radius="50000">50km</button>
+                        <button class="radius-btn" data-radius="5000">5km</button>
                     </div>
                 </div>
 
@@ -688,8 +688,8 @@
                 <div class="mode-switch" style="margin-top:10px;">
                     <label>数据获取方式</label>
                     <div class="mode-options" style="display:flex;gap:6px;margin-top:4px;">
-                        <button class="mode-btn active" data-mode="api" onclick="switchMode('api')"
-                            style="flex:1;padding:8px;border:2px solid #1a73e8;background:#e8f0fe;color:#1a73e8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
+                        <button class="mode-btn" data-mode="api" onclick="switchMode('api')"
+                            style="flex:1;padding:8px;border:2px solid #ddd;background:white;color:#555;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
                             🔑 Google API<br><span style="font-weight:normal;font-size:10px;color:#666;">需要API
                                 Key</span>
                         </button>
@@ -697,9 +697,9 @@
                             style="flex:1;padding:8px;border:2px solid #ddd;background:white;color:#555;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
                             🤖 Rod单城市<br><span style="font-weight:normal;font-size:10px;color:#666;">无需Key</span>
                         </button>
-                        <button class="mode-btn" data-mode="rod_concurrent" onclick="switchMode('rod_concurrent')"
-                            style="flex:1;padding:8px;border:2px solid #ddd;background:white;color:#555;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
-                            🚀 Rod多城市并发<br><span style="font-weight:normal;font-size:10px;color:#666;">同时搜多个城市</span>
+                        <button class="mode-btn active" data-mode="rod_concurrent" onclick="switchMode('rod_concurrent')"
+                            style="flex:1;padding:8px;border:2px solid #1a73e8;background:#e8f0fe;color:#1a73e8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;">
+                            🚀 Rod多城市<br><span style="font-weight:normal;font-size:10px;color:#666;">同时搜多个城市</span>
                         </button>
                     </div>
                     <div id="rodOptions" style="display:none;margin-top:8px;">
@@ -760,23 +760,10 @@
                             style="width:100%;padding:6px 12px;border:1px solid #dc3545;border-radius:8px;font-size:12px;background:white;color:#dc3545;cursor:pointer;margin-bottom:8px;">
                             🗑️ 清空已选城市
                         </button>
-                        <div style="display:flex;gap:8px;margin-bottom:6px;">
-                            <div style="flex:1;">
-                                <label style="font-size:12px;">并发数（同时搜索几个城市）</label>
-                                <input type="number" id="concurrentCount" value="2" min="1" max="5"
-                                    style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
-                            </div>
-                            <div style="flex:1;">
-                                <label style="font-size:12px;">每城市最大商家数</label>
-                                <input type="number" id="maxCountConcurrent" value="30" min="5" max="200"
-                                    style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
-                            </div>
-                        </div>
-                        <div
-                            style="background:#d4edda;border:1px solid #28a745;border-radius:6px;padding:8px;margin-top:6px;font-size:11px;color:#155724;">
-                            🚀 并发模式同时启动多个浏览器，速度翻倍！<br>
-                            · 建议并发数 2-3，过高可能导致内存不足<br>
-                            · 最多支持同时搜索 10 个城市
+                        <div style="margin-bottom:6px;">
+                            <label style="font-size:12px;">每城市最大商家数</label>
+                            <input type="number" id="maxCountConcurrent" value="30" min="5" max="200"
+                                style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;" />
                         </div>
                     </div>
                 </div>
@@ -788,10 +775,10 @@
                         style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-top:6px;" />
                     <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
                         <label style="font-size:12px;color:#555;white-space:nowrap;">匹配阈值：</label>
-                        <input type="range" id="aiScoreThreshold" min="0" max="100" value="30" style="flex:1;"
+                        <input type="range" id="aiScoreThreshold" min="0" max="100" value="0" style="flex:1;"
                             oninput="document.getElementById('thresholdVal').textContent=this.value" />
                         <span id="thresholdVal"
-                            style="font-size:13px;font-weight:600;color:#1a73e8;min-width:28px;">30</span>
+                            style="font-size:13px;font-weight:600;color:#1a73e8;min-width:28px;">0</span>
                         <span style="font-size:11px;color:#888;">分</span>
                     </div>
                     <div style="font-size:11px;color:#666;margin-top:4px;">
@@ -810,7 +797,7 @@
             </div>
 
             <!-- 过滤器面板 -->
-            <div class="filter-panel" id="filterPanel">
+            <div class="filter-panel" id="filterPanel" style="display: none;">
                 <h4>🔍 过滤器设置</h4>
                 <div class="filter-row">
                     <label>包含关键词</label>
@@ -839,7 +826,7 @@
             </div>
 
             <!-- 爬取操作栏 -->
-            <div class="scrape-bar" id="scrapeBar">
+            <div class="scrape-bar" id="scrapeBar" style="display: none;">
                 <div class="scrape-btns">
                     <button onclick="toggleFilterPanel()" class="filter-toggle">⚙️ 过滤器</button>
                     <button id="btnScrapeAll" onclick="scrapeAll()">🕷️ 爬取全部网站</button>
@@ -898,7 +885,7 @@
 
     <script>
         let map, searchCenter = { lat: 39.9042, lng: 116.4074 }, radiusCircle, markers = [], infoWindow;
-        let currentRadius = 5000;
+        let currentRadius = 50000;
         let businesses = [];
         let nextPageToken = '';
         let currentRecordId = 0;
@@ -984,7 +971,7 @@
         });
 
         // 搜索模式
-        let currentMode = 'api';
+        let currentMode = 'rod_concurrent';
 
         function switchMode(mode) {
             currentMode = mode;
@@ -1230,7 +1217,7 @@
                 address: address,
                 mode: currentMode,
                 ai_requirement: document.getElementById('aiRequirement') ? document.getElementById('aiRequirement').value.trim() : '',
-                ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '30') || 30
+                ai_score_threshold: parseInt(document.getElementById('aiScoreThreshold') ? document.getElementById('aiScoreThreshold').value : '0') || 0
             };
 
             if (currentMode === 'rod') {
@@ -1258,7 +1245,7 @@
                     return;
                 }
                 reqBody.cities = selectedCities;
-                reqBody.concurrent = parseInt(document.getElementById('concurrentCount').value) || 2;
+                reqBody.concurrent = 1;
                 reqBody.max_count = parseInt(document.getElementById('maxCountConcurrent').value) || 30;
                 reqBody.address = selectedCities.join(', ');
             }
@@ -1856,6 +1843,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             initCitiesData();
             initSearchStatus();
+            // 设置初始模式为多城市并发
+            switchMode(currentMode);
         });
     </script>
 

@@ -195,7 +195,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	}
 
 	if req.Radius <= 0 {
-		req.Radius = 5000
+		req.Radius = 50000
 	}
 	if req.Radius > 50000 {
 		req.Radius = 50000
@@ -416,7 +416,7 @@ func (h *SearchHandler) searchByRodConcurrent(c *gin.Context, req SearchRequest)
 		req.MaxCount = 30
 	}
 	if req.Concurrent <= 0 {
-		req.Concurrent = 2
+		req.Concurrent = 1
 	}
 	if req.AIRequirement != "" && !h.doubao.IsEnabled() {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "豆包AI未启用，请先在config.json开启 doubao.enabled 并配置可用API Key"})
