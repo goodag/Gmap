@@ -101,6 +101,7 @@ func main() {
 			api.POST("/search/next", searchHandler.SearchNextPage)
 			api.POST("/search/stop", searchHandler.StopSearch)
 			api.GET("/search/progress", searchHandler.GetTaskProgress)
+			api.GET("/search/status", searchHandler.GetTaskStatus)
 			api.GET("/place/detail", searchHandler.GetPlaceDetail)
 			api.GET("/companies", searchHandler.GetCompanies)
 

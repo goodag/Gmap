@@ -1280,6 +1280,9 @@
                 showToast(`${modeLabel} 找到 ${businesses.length} 个商家`, 'success');
                 // 显示爬取操作栏
                 document.getElementById('scrapeBar').classList.add('show');
+                
+                // 搜索成功完成后才更新状态为已完成
+                updateSearchStatus('completed', { total_results: businesses.length });
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     showToast('搜索失败: ' + err.message, 'error');
@@ -1291,8 +1294,6 @@
                 document.getElementById('btnStop').style.display = 'none';
                 // 重置中止控制器
                 abortController = null;
-                // 更新任务状态为已完成
-                updateSearchStatus('completed');
             }
         }
 
@@ -1317,21 +1318,45 @@
         }
 
         // 更新搜索任务状态
-        function updateSearchStatus(status) {
+        function updateSearchStatus(status, taskData) {
             const statusDiv = document.getElementById('searchStatus');
+            const btn = document.getElementById('btnSearch');
+            
             if (status === 'running') {
                 statusDiv.innerHTML = '⏳ 任务进行中...';
                 statusDiv.style.background = '#fff3cd';
                 statusDiv.style.color = '#856404';
                 statusDiv.style.borderColor = '#ffeeba';
+                // 禁用搜索按钮
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
                 // 保存状态到 localStorage
                 localStorage.setItem('searchStatus', 'running');
                 localStorage.setItem('searchTaskId', Date.now().toString());
-            } else {
-                statusDiv.innerHTML = '✅ 已完成';
+            } else if (status === 'completed') {
+                statusDiv.innerHTML = taskData ? `✅ 已完成 - 找到 ${taskData.total_results || 0} 家` : '✅ 已完成';
                 statusDiv.style.background = '#e8f5e9';
                 statusDiv.style.color = '#155724';
                 statusDiv.style.borderColor = '#c3e6cb';
+                // 启用搜索按钮
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                // 清除 localStorage 中的状态
+                localStorage.removeItem('searchStatus');
+                localStorage.removeItem('searchTaskId');
+                // 停止进度轮询
+                stopProgressPolling();
+            } else if (status === 'failed') {
+                statusDiv.innerHTML = '❌ 任务失败';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.borderColor = '#f5c6cb';
+                // 启用搜索按钮
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
                 // 清除 localStorage 中的状态
                 localStorage.removeItem('searchStatus');
                 localStorage.removeItem('searchTaskId');
@@ -1342,37 +1367,47 @@
 
         // 初始化搜索状态（页面加载时调用）
         function initSearchStatus() {
-            // 先从后端查询真实的任务进度
-            fetch('/api/search/progress')
+            // 先从后端查询真实的任务状态（支持查询任意状态）
+            fetch('/api/search/status')
                 .then(resp => resp.json())
                 .then(data => {
-                    if (data.code === 0 && data.data.running) {
-                        // 有正在进行的任务
-                        const progress = data.data;
+                    if (data.code === 0 && data.data.exist) {
+                        const taskData = data.data;
                         const statusDiv = document.getElementById('searchStatus');
-                        const current = progress.current_index || 1;
-                        const total = progress.total_cities || 1;
-                        const fetched = progress.fetched_count || 0;
+                        const btn = document.getElementById('btnSearch');
                         
-                        statusDiv.innerHTML = `⏳ 任务进行中... [${current}/${total}] ${progress.current_city || '搜索中'} - 已抓取 ${fetched} 家`;
-                        statusDiv.style.background = '#fff3cd';
-                        statusDiv.style.color = '#856404';
-                        statusDiv.style.borderColor = '#ffeeba';
-                        
-                        localStorage.setItem('searchStatus', 'running');
-                        localStorage.setItem('searchTaskId', Date.now().toString());
-                        document.getElementById('btnStop').style.display = 'block';
-                        
-                        // 启动定时刷新进度
-                        startProgressPolling();
-                    } else {
-                        // 没有进行中的任务，恢复默认状态
-                        const savedStatus = localStorage.getItem('searchStatus');
-                        if (savedStatus !== 'running') {
-                            updateSearchStatus('completed');
+                        if (taskData.status === 0) {
+                            // 进行中
+                            const current = taskData.current_index || 1;
+                            const total = taskData.total_cities || 1;
+                            const fetched = taskData.fetched_count || 0;
+                            
+                            statusDiv.innerHTML = `⏳ ${taskData.status_text}... [${current}/${total}] ${taskData.current_city || '搜索中'} - 已抓取 ${fetched} 家`;
+                            statusDiv.style.background = '#fff3cd';
+                            statusDiv.style.color = '#856404';
+                            statusDiv.style.borderColor = '#ffeeba';
+                            
+                            // 禁用搜索按钮
+                            btn.disabled = true;
+                            btn.style.opacity = '0.5';
+                            btn.style.cursor = 'not-allowed';
+                            
+                            localStorage.setItem('searchStatus', 'running');
+                            localStorage.setItem('searchTaskId', taskData.record_id);
+                            document.getElementById('btnStop').style.display = 'block';
+                            
+                            // 启动定时刷新进度
+                            startProgressPolling();
+                        } else if (taskData.status === 1) {
+                            // 已完成
+                            updateSearchStatus('completed', taskData);
+                        } else if (taskData.status === 2) {
+                            // 已失败
+                            updateSearchStatus('failed', taskData);
                         }
-                        localStorage.removeItem('searchStatus');
-                        localStorage.removeItem('searchTaskId');
+                    } else {
+                        // 没有任务记录，隐藏状态显示
+                        document.getElementById('searchStatus').style.display = 'none';
                     }
                 })
                 .catch(() => {

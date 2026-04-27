@@ -531,7 +531,7 @@ func (h *SearchHandler) StopSearch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已发送停止信号"})
 }
 
-// GetTaskProgress 获取任务进度
+// GetTaskProgress 获取任务进度（仅查询进行中的任务）
 func (h *SearchHandler) GetTaskProgress(c *gin.Context) {
 	// 查询最近的进行中的任务
 	var record models.SearchRecord
@@ -564,6 +564,70 @@ func (h *SearchHandler) GetTaskProgress(c *gin.Context) {
 			"source":        record.Source,
 		},
 	})
+}
+
+// GetTaskStatus 获取任务状态（支持查询任意状态的任务）
+// 参数：task_id - 任务ID（可选，不传则查询最新任务）
+func (h *SearchHandler) GetTaskStatus(c *gin.Context) {
+	taskID := c.Query("task_id")
+
+	var record models.SearchRecord
+	var err error
+
+	if taskID != "" {
+		// 根据任务ID查询
+		err = h.db.Where("id = ?", taskID).First(&record).Error
+	} else {
+		// 查询最新任务（包括已完成的）
+		err = h.db.Order("created_at DESC").First(&record).Error
+	}
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"data": gin.H{
+				"exist":  false,
+				"status": -1,
+				"message": "未找到任务",
+			},
+		})
+		return
+	}
+
+	// 获取状态文本
+	statusText := getStatusText(record.Status)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": gin.H{
+			"exist":          true,
+			"record_id":      record.ID,
+			"keyword":        record.Keyword,
+			"address":        record.Address,
+			"status":         record.Status,
+			"status_text":    statusText,
+			"total_results":  record.TotalResults,
+			"current_city":   record.CurrentCity,
+			"current_index":  record.CurrentIndex,
+			"total_cities":   record.TotalCities,
+			"fetched_count":  record.FetchedCount,
+			"source":         record.Source,
+			"created_at":     record.CreatedAt.Format("2006-01-02 15:04:05"),
+		},
+	})
+}
+
+// getStatusText 获取状态文本
+func getStatusText(status int8) string {
+	statusMap := map[int8]string{
+		0: "进行中",
+		1: "已完成",
+		2: "已失败",
+	}
+	if text, ok := statusMap[status]; ok {
+		return text
+	}
+	return "未知"
 }
 
 // updateProgress 更新任务进度

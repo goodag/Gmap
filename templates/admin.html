@@ -358,6 +358,7 @@
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>状态</th>
                             <th>关键词</th>
                             <th>地点</th>
                             <th>坐标</th>
@@ -431,10 +432,21 @@
                 const todayCount = records.filter(r => r.created_at && r.created_at.startsWith(today)).length;
                 document.getElementById('statToday').textContent = todayCount;
 
+                // 获取状态信息
+                function getStatusInfo(status) {
+                    const statusMap = {
+                        0: { text: '进行中', color: '#f59e0b', bgColor: '#fef3c7' },
+                        1: { text: '已完成', color: '#10b981', bgColor: '#ecfdf5' },
+                        2: { text: '已失败', color: '#ef4444', bgColor: '#fef2f2' }
+                    };
+                    const info = statusMap[status] || { text: '未知', color: '#6b7280', bgColor: '#f3f4f6' };
+                    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;color:${info.color};background:${info.bgColor}">${info.text}</span>`;
+                }
+
                 // 渲染表格
                 const tbody = document.getElementById('recordsBody');
                 if (records.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无搜索记录</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无搜索记录</td></tr>';
                     return;
                 }
 
@@ -442,6 +454,7 @@
                 records.forEach(r => {
                     html += `<tr>
                         <td>${r.id}</td>
+                        <td>${getStatusInfo(r.status)}</td>
                         <td>${r.keyword ? `<span class="badge badge-blue">${esc(r.keyword)}</span>` : '<span class="badge badge-gray">无</span>'}</td>
                         <td>${esc(r.address) || '-'}</td>
                         <td style="font-size:11px;font-family:monospace">${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}</td>
@@ -455,7 +468,7 @@
                             <button class="btn btn-danger" onclick="deleteRecord(${r.id})">删除</button>
                         </td>
                     </tr>
-                    <tr class="expand-row" id="expand-${r.id}"><td colspan="8"></td></tr>`;
+                    <tr class="expand-row" id="expand-${r.id}"><td colspan="9"></td></tr>`;
                 });
                 tbody.innerHTML = html;
 
