@@ -42,9 +42,21 @@ func (h *SearchHandler) scrapeCompanyWebsites(companies []models.Company) []mode
 			continue
 		}
 		log.Printf("[Scrape] 爬取网站 %d/%d: %s -> %s", i+1, len(companies), companies[i].Name, companies[i].Website)
+
+		// 1. 先使用 colly 静态爬取（快速）
 		page := h.scraper.ScrapeWebsite(companies[i].Website)
 		if page == nil {
 			continue
+		}
+
+		// 2. 如果静态爬取没有找到邮箱，尝试使用 Rod 浏览器（支持JS渲染和多Tab）
+		if len(page.Emails) == 0 && page.Success {
+			log.Printf("[Scrape] colly未找到邮箱，尝试使用Rod浏览器爬取...")
+			rodPage := h.rodService.ScrapeWebsiteWithRod(companies[i].Website)
+			if rodPage != nil && rodPage.Success && len(rodPage.Emails) > 0 {
+				log.Printf("[Scrape] Rod成功提取到 %d 个邮箱", len(rodPage.Emails))
+				page = rodPage
+			}
 		}
 
 		emailsJSON, _ := json.Marshal(page.Emails)

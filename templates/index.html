@@ -752,7 +752,7 @@
                             style="width:100%;padding:8px 12px;border:1px solid #1a73e8;border-radius:8px;font-size:13px;background:#1a73e8;color:white;cursor:pointer;margin-bottom:6px;">
                             ➕ 添加选中城市到列表
                         </button>
-                        <label>已选城市（最多10个）</label>
+                        <label>已选城市</label>
                         <div id="selectedCitiesList" style="min-height:40px;border:1px dashed #ddd;border-radius:8px;padding:6px;margin-bottom:6px;">
                             <span style="color:#999;">暂无选中城市</span>
                         </div>
@@ -1144,10 +1144,6 @@
 
             selectedOptions.forEach(opt => {
                 if (opt.value && !selectedCities.includes(opt.value)) {
-                    if (selectedCities.length >= 10) {
-                        alert('最多只能选择10个城市');
-                        return;
-                    }
                     selectedCities.push(opt.value);
                 }
             });
