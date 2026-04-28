@@ -31,7 +31,7 @@ func main() {
 
 	// 自动迁移（仅在数据库连接成功时）
 	if db != nil {
-		db.AutoMigrate(&models.SearchRecord{}, &models.Company{}, &models.CompanyEmail{}, &models.EmailLog{}, &models.CronTask{})
+		db.AutoMigrate(&models.SearchRecord{}, &models.Company{}, &models.CompanyEmail{}, &models.EmailLog{}, &models.CronTask{}, &models.BulkRodProgress{})
 	}
 
 	// 启动定时任务调度器（仅在数据库连接成功时）
@@ -55,6 +55,7 @@ func main() {
 	var googleSearchHandler *handlers.GoogleSearchHandler
 	var cronHandler *handlers.CronHandler
 	var exportHandler *handlers.ExportHandler
+	var bulkRodHandler *handlers.BulkRodHandler
 
 	if db != nil {
 		searchHandler = handlers.NewSearchHandler(db)
@@ -63,6 +64,8 @@ func main() {
 		googleSearchHandler = handlers.NewGoogleSearchHandler(db)
 		cronHandler = handlers.NewCronHandler(db, scheduler)
 		exportHandler = handlers.NewExportHandler(db)
+		bulkRodSvc := services.NewBulkRodService(db)
+		bulkRodHandler = handlers.NewBulkRodHandler(db, bulkRodSvc)
 	}
 
 	cityHandler := handlers.NewCityHandler()
@@ -153,6 +156,17 @@ func main() {
 			api.GET("/export/record/:id", exportHandler.ExportByRecord)
 			api.POST("/export/record/:id/send-email", exportHandler.SendEmailsByRecord)
 			api.GET("/export/all", exportHandler.ExportAll)
+		}
+
+		if bulkRodHandler != nil {
+			// 批量Rod搜索
+			api.POST("/bulk-rod/start", bulkRodHandler.CreateAndStart)
+			api.POST("/bulk-rod/resume/:id", bulkRodHandler.Resume)
+			api.POST("/bulk-rod/stop", bulkRodHandler.Stop)
+			api.GET("/bulk-rod/status", bulkRodHandler.GetStatus)
+			api.POST("/bulk-rod/reset/:id", bulkRodHandler.Reset)
+			api.GET("/bulk-rod/tasks", bulkRodHandler.GetAllTasks)
+			api.POST("/bulk-rod/retry/:id", bulkRodHandler.RetryFailed)
 		}
 
 		// 城市数据（不需要数据库）

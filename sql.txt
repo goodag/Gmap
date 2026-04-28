@@ -121,3 +121,29 @@ CREATE TABLE IF NOT EXISTS cron_tasks (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='定时任务配置表';
+
+-- 批量Rod搜索任务进度表
+CREATE TABLE IF NOT EXISTS bulk_rod_progress (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    keywords LONGTEXT NOT NULL COMMENT '逗号分隔的关键词列表',
+    countries LONGTEXT NOT NULL COMMENT '逗号分隔的国家名(英文)',
+    keyword_index INT NOT NULL DEFAULT 0 COMMENT '当前关键词索引',
+    city_index INT NOT NULL DEFAULT 0 COMMENT '当前城市索引(平铺)',
+    total_keywords INT NOT NULL DEFAULT 0 COMMENT '关键词总数',
+    total_cities INT NOT NULL DEFAULT 0 COMMENT '城市总数',
+    total_combos INT NOT NULL DEFAULT 0 COMMENT '总组合数(关键词×城市)',
+    completed INT NOT NULL DEFAULT 0 COMMENT '已完成组合数',
+    success_count INT NOT NULL DEFAULT 0 COMMENT '成功次数',
+    error_count INT NOT NULL DEFAULT 0 COMMENT '失败次数',
+    total_found INT NOT NULL DEFAULT 0 COMMENT '累计找到的商家数',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '状态: 0=空闲 1=运行中 2=已暂停 3=已完成',
+    last_keyword VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近搜索的关键词',
+    last_city VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近搜索的城市',
+    last_country VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近搜索的国家',
+    last_error VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '最近一次错误信息',
+    interval_sec INT NOT NULL DEFAULT 30 COMMENT '每次搜索间隔秒数',
+    cities_flat LONGTEXT COMMENT '平铺城市列表JSON',
+    search_record_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联的唯一搜索记录ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批量Rod搜索任务进度表';

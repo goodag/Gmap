@@ -117,3 +117,31 @@ type CronTask struct {
 }
 
 func (CronTask) TableName() string { return "cron_tasks" }
+
+// BulkRodProgress 批量Rod搜索任务进度
+type BulkRodProgress struct {
+	ID            uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	Keywords      string    `gorm:"type:longtext;not null" json:"keywords"`           // 逗号分隔的关键词
+	Countries     string    `gorm:"type:text;not null" json:"countries"`              // 逗号分隔的国家名(英文)
+	KeywordIndex  int       `gorm:"not null;default:0" json:"keyword_index"`          // 当前关键词索引
+	CityIndex     int       `gorm:"not null;default:0" json:"city_index"`             // 当前城市索引(平铺)
+	TotalKeywords int       `gorm:"not null;default:0" json:"total_keywords"`
+	TotalCities   int       `gorm:"not null;default:0" json:"total_cities"`
+	TotalCombos   int       `gorm:"not null;default:0" json:"total_combos"`
+	Completed     int       `gorm:"not null;default:0" json:"completed"`
+	SuccessCount  int       `gorm:"not null;default:0" json:"success_count"`
+	ErrorCount    int       `gorm:"not null;default:0" json:"error_count"`
+	TotalFound    int       `gorm:"not null;default:0" json:"total_found"`            // 累计找到的商家数
+	Status        int8      `gorm:"not null;default:0" json:"status"`                 // 0=空闲 1=运行中 2=已暂停 3=已完成
+	LastKeyword   string    `gorm:"size:500;not null;default:''" json:"last_keyword"`
+	LastCity      string    `gorm:"size:255;not null;default:''" json:"last_city"`
+	LastCountry   string    `gorm:"size:255;not null;default:''" json:"last_country"`
+	LastError     string    `gorm:"size:1000;not null;default:''" json:"last_error"`
+	IntervalSec   int       `gorm:"not null;default:30" json:"interval_sec"`          // 每次搜索间隔秒数
+	CitiesFlat    string    `gorm:"type:longtext" json:"cities_flat"`                 // 平铺城市列表 JSON
+	SearchRecordID uint64   `gorm:"not null;default:0" json:"search_record_id"`       // 关联的唯一搜索记录ID
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (BulkRodProgress) TableName() string { return "bulk_rod_progress" }
