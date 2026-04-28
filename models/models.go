@@ -9,7 +9,7 @@ type SearchRecord struct {
 	Keyword      string    `gorm:"size:255;not null;default:''" json:"keyword"`
 	Latitude     float64   `gorm:"type:decimal(10,7);not null;default:0" json:"latitude"`
 	Longitude    float64   `gorm:"type:decimal(10,7);not null;default:0" json:"longitude"`
-	Radius       int       `gorm:"not null;default:5000" json:"radius"`
+	Radius       int       `gorm:"not null;default:50000" json:"radius"`
 	Address      string    `gorm:"size:500;not null;default:''" json:"address"`
 	Location     string    `gorm:"size:255;not null;default:''" json:"location"` // 谷歌搜索的地区限制
 	Language     string    `gorm:"size:20;not null;default:''" json:"language"`
@@ -17,6 +17,11 @@ type SearchRecord struct {
 	TotalResults int       `gorm:"not null;default:0" json:"total_results"`
 	Status       int8      `gorm:"not null;default:1" json:"status"` // 0=进行中 1=完成 2=失败
 	ErrorMsg     string    `gorm:"size:1000;not null;default:''" json:"error_msg"`
+	// 进度字段
+	CurrentCity  string `gorm:"size:255;not null;default:''" json:"current_city"`   // 当前正在搜索的城市
+	TotalCities  int    `gorm:"not null;default:0" json:"total_cities"`             // 总城市数
+	CurrentIndex int    `gorm:"not null;default:0" json:"current_index"`           // 当前城市索引
+	FetchedCount int    `gorm:"not null;default:0" json:"fetched_count"`           // 已抓取商家数
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

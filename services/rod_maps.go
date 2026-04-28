@@ -73,10 +73,11 @@ type RodSearchRequest struct {
 
 // RodConcurrentRequest 并发搜索请求
 type RodConcurrentRequest struct {
-	Keyword    string   `json:"keyword"`
-	Cities     []string `json:"cities"`     // 多个城市
-	MaxCount   int      `json:"max_count"`  // 每个城市最大数量
-	Concurrent int      `json:"concurrent"` // 并发数（同时开几个浏览器）
+	Keyword    string                                            `json:"keyword"`
+	Cities     []string                                          `json:"cities"`     // 多个城市
+	MaxCount   int                                               `json:"max_count"`  // 每个城市最大数量
+	Concurrent int                                               `json:"concurrent"` // 并发数（同时开几个浏览器）
+	OnProgress func(city string, index, total, fetchedCount int) // 进度回调函数
 }
 
 // RodConcurrentResult 单个城市的搜索结果
@@ -206,7 +207,7 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 	s.ResetStopFlag()
 
 	if req.Concurrent <= 0 {
-		req.Concurrent = 2
+		req.Concurrent = 1
 	}
 	if req.Concurrent > 5 {
 		req.Concurrent = 5 // 最多5个并发，避免资源耗尽
@@ -216,6 +217,8 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 	}
 
 	results := make([]RodConcurrentResult, len(req.Cities))
+	totalFetched := 0
+	progressLock := sync.Mutex{}
 
 	// 并发任务开始前先做一次浏览器预检查，避免每个城市都重复等待失败
 	if err := s.EnsureBrowser(); err != nil {
@@ -285,6 +288,14 @@ func (s *RodMapsService) ConcurrentSearch(req RodConcurrentRequest) []RodConcurr
 			}
 
 			results[idx] = result
+
+			// 更新进度
+			progressLock.Lock()
+			totalFetched += len(result.Companies)
+			if req.OnProgress != nil {
+				req.OnProgress(cityName, idx, len(req.Cities), totalFetched)
+			}
+			progressLock.Unlock()
 		}(i, city)
 	}
 
@@ -436,6 +447,9 @@ func (s *RodMapsService) launchBrowser() (*rod.Browser, error) {
 	browser := rod.New().ControlURL(controlURL)
 	err = browser.Connect()
 	if err != nil {
+		log.Printf("[Rod] 连接浏览器失败，正在关闭已启动的进程: %v", err)
+		// 关键修复：连接失败时必须关闭已启动的浏览器进程
+		l.Cleanup()
 		return nil, fmt.Errorf("连接浏览器失败: %v", err)
 	}
 
@@ -1187,4 +1201,393 @@ func ParseRatingFromString(s string) float64 {
 	}
 	f, _ := strconv.ParseFloat(m, 64)
 	return f
+}
+
+// ScrapeWebsiteWithRod 使用Rod浏览器爬取网站（支持JavaScript渲染和多Tab）
+func (s *RodMapsService) ScrapeWebsiteWithRod(urlStr string) *ScrapedPage {
+	result := &ScrapedPage{URL: urlStr}
+
+	if urlStr == "" {
+		result.Error = "URL为空"
+		return result
+	}
+
+	parsed, err := url.Parse(urlStr)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		if !strings.HasPrefix(urlStr, "http") {
+			urlStr = "https://" + urlStr
+			parsed, err = url.Parse(urlStr)
+			if err != nil {
+				result.Error = "无效的URL"
+				return result
+			}
+		} else {
+			result.Error = "无效的URL"
+			return result
+		}
+	}
+	result.URL = urlStr
+
+	l := launcher.New().
+		Leakless(false).
+		Headless(true).
+		Set("no-sandbox").
+		Set("disable-gpu").
+		Set("disable-dev-shm-usage")
+
+	if s.chromePath != "" {
+		l.Bin(s.chromePath)
+	}
+
+	launcherURL, err := l.Launch()
+	if err != nil {
+		log.Printf("[Rod] 启动浏览器失败: %v", err)
+		result.Error = fmt.Sprintf("启动浏览器失败: %v", err)
+		return result
+	}
+
+	browser := rod.New().ControlURL(launcherURL)
+	err = browser.Connect()
+	if err != nil {
+		log.Printf("[Rod] 连接浏览器失败，正在关闭已启动的进程: %v", err)
+		l.Cleanup()
+		result.Error = fmt.Sprintf("连接浏览器失败: %v", err)
+		return result
+	}
+	defer browser.MustClose()
+
+	page := browser.MustPage(urlStr)
+
+	err = page.WaitLoad()
+	if err != nil {
+		log.Printf("[Rod] 页面加载超时，继续尝试提取数据: %v", err)
+	}
+
+	titleVal, err := page.Eval(`document.title`)
+	if err == nil && titleVal != nil {
+		result.Title = fmt.Sprintf("%v", titleVal.Value)
+	}
+
+	var allText strings.Builder
+
+	pageText, err := page.Eval(`document.body.innerText`)
+	if err == nil && pageText != nil {
+		allText.WriteString(fmt.Sprintf("%v", pageText.Value))
+	}
+
+	s.extractFromAllTabs(page, &allText)
+
+	htmlContent, err := page.HTML()
+	if err != nil {
+		htmlContent = "html error"
+	}
+	if len(htmlContent) > 2000 {
+		htmlContent = htmlContent[:2000]
+	}
+
+	emailSet := make(map[string]bool)
+	phoneSet := make(map[string]bool)
+	socialSet := make(map[string]bool)
+
+	for _, email := range emailRegex.FindAllString(allText.String(), -1) {
+		email = strings.ToLower(email)
+		if isValidEmail(email) && !emailSet[email] {
+			emailSet[email] = true
+		}
+	}
+
+	for _, email := range emailRegex.FindAllString(htmlContent, -1) {
+		email = strings.ToLower(email)
+		if isValidEmail(email) && !emailSet[email] {
+			emailSet[email] = true
+		}
+	}
+
+	for _, phone := range phoneRegex.FindAllString(allText.String(), -1) {
+		phone = strings.TrimSpace(phone)
+		if len(phone) >= 7 && !phoneSet[phone] {
+			phoneSet[phone] = true
+		}
+	}
+
+	for _, phone := range phoneRegex.FindAllString(htmlContent, -1) {
+		phone = strings.TrimSpace(phone)
+		if len(phone) >= 7 && !phoneSet[phone] {
+			phoneSet[phone] = true
+		}
+	}
+
+	links, err := page.Elements("a[href]")
+	if err == nil {
+		for _, link := range links {
+			href, err := link.Attribute("href")
+			if err != nil || href == nil {
+				continue
+			}
+			socialPlatforms := []string{
+				"facebook.com", "twitter.com", "x.com", "instagram.com",
+				"linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
+				"weibo.com", "wechat.com",
+			}
+			for _, platform := range socialPlatforms {
+				if strings.Contains(*href, platform) && !socialSet[*href] {
+					socialSet[*href] = true
+					break
+				}
+			}
+		}
+	}
+
+	for email := range emailSet {
+		result.Emails = append(result.Emails, email)
+	}
+	for phone := range phoneSet {
+		result.Phones = append(result.Phones, phone)
+	}
+	for link := range socialSet {
+		result.SocialLinks = append(result.SocialLinks, link)
+	}
+
+	result.BodyText = cleanText(allText.String())
+	result.Success = true
+
+	log.Printf("[Rod] 爬取完成: %s, 找到 %d 个邮箱", urlStr, len(result.Emails))
+	return result
+}
+
+// extractFromAllTabs 尝试切换页面内的所有Tab并提取内容（带超时保护和关键词过滤）
+func (s *RodMapsService) extractFromAllTabs(page *rod.Page, allText *strings.Builder) {
+	tabSelectors := []string{
+		`ul.nav-tabs li a`,
+		`ul.nav li a[data-toggle="tab"]`,
+		`button[role="tab"]`,
+		`.tabs .tab`,
+		`.tab-container .tab-button`,
+		`div[role="tablist"] button`,
+		`.tab-item`,
+		`.nav-item a`,
+	}
+
+	// 需要关注的关键词（中英文）- 只处理这些Tab/链接
+	contactKeywords := []string{
+		"contact", "about", "联系", "关于",
+		"info", "information", "support", "帮助",
+		"company", "corporate", "about us", "关于我们",
+		"联系方式", "联系我们", "公司简介", "contact us",
+	}
+
+	// 1. 先处理页面内Tab切换
+	for _, selector := range tabSelectors {
+		tabs, err := page.Elements(selector)
+		if err != nil || len(tabs) == 0 {
+			continue
+		}
+
+		log.Printf("[Rod] 发现 %d 个Tab", len(tabs))
+
+		for i, tab := range tabs {
+			tabText, _ := tab.Text()
+			tabTextLower := strings.ToLower(tabText)
+
+			// 过滤：只处理包含联系/关于关键词的Tab
+			shouldProcess := false
+			for _, kw := range contactKeywords {
+				if strings.Contains(tabTextLower, strings.ToLower(kw)) {
+					shouldProcess = true
+					break
+				}
+			}
+
+			if !shouldProcess {
+				log.Printf("[Rod] Tab %d (%s) 不包含联系关键词，跳过", i+1, tabText)
+				continue
+			}
+
+			log.Printf("[Rod] 处理 Tab %d: %s", i+1, tabText)
+
+			// 带超时的点击操作（5秒超时）
+			clickDone := make(chan bool, 1)
+			go func(tab *rod.Element) {
+				err := tab.Click(proto.InputMouseButtonLeft, 1)
+				if err != nil {
+					log.Printf("[Rod] Tab点击失败: %v", err)
+				}
+				clickDone <- true
+			}(tab)
+
+			select {
+			case <-clickDone:
+				// 点击成功，继续
+			case <-time.After(5 * time.Second):
+				log.Printf("[Rod] Tab %d 点击超时，跳过", i+1)
+				continue
+			}
+
+			time.Sleep(500 * time.Millisecond)
+
+			// 带超时的Eval操作（20秒超时）
+			contentDone := make(chan string, 1)
+			go func() {
+				tabContent, err := page.Eval(`document.body.innerText`)
+				if err != nil || tabContent == nil {
+					contentDone <- ""
+					return
+				}
+				contentDone <- fmt.Sprintf("%v", tabContent.Value)
+			}()
+
+			select {
+			case content := <-contentDone:
+				if content != "" {
+					allText.WriteString(" ")
+					allText.WriteString(content)
+					log.Printf("[Rod] Tab %d (%s) 提取完成", i+1, tabText)
+				}
+			case <-time.After(20 * time.Second):
+				log.Printf("[Rod] Tab %d Eval超时，跳过", i+1)
+				continue
+			}
+		}
+		break
+	}
+
+	// 2. 处理指向其他页面的链接（如 <a href="/contact">Contact</a>）
+	s.extractFromContactLinks(page, allText, contactKeywords)
+}
+
+// extractFromContactLinks 处理指向Contact/About页面的链接
+func (s *RodMapsService) extractFromContactLinks(page *rod.Page, allText *strings.Builder, contactKeywords []string) {
+	links, err := page.Elements(`a[href]`)
+	if err != nil || len(links) == 0 {
+		return
+	}
+
+	log.Printf("[Rod] 发现 %d 个链接", len(links))
+
+	// 用于记录已处理的URL，避免重复
+	processedURLs := make(map[string]bool)
+
+	// 收集需要处理的链接
+	var targetLinks []string
+	for i, link := range links {
+		linkText, _ := link.Text()
+		linkTextLower := strings.ToLower(linkText)
+
+		// 获取href属性
+		href, err := link.Attribute("href")
+		if err != nil || href == nil || *href == "" {
+			continue
+		}
+
+		// 过滤：只处理包含联系/关于关键词的链接文字或URL
+		shouldProcess := false
+		for _, kw := range contactKeywords {
+			if strings.Contains(linkTextLower, strings.ToLower(kw)) ||
+				strings.Contains(strings.ToLower(*href), strings.ToLower(kw)) {
+				shouldProcess = true
+				break
+			}
+		}
+
+		if !shouldProcess {
+			continue
+		}
+
+		// 解析URL
+		parsedURL, err := url.Parse(*href)
+		if err != nil {
+			continue
+		}
+
+		// 跳过无效链接和外部链接
+		if parsedURL.Scheme != "" && parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			continue
+		}
+
+		// 跳过锚点链接（#开头）
+		if strings.HasPrefix(*href, "#") {
+			continue
+		}
+
+		// 构建完整URL
+		var fullURL string
+		if parsedURL.IsAbs() {
+			fullURL = *href
+		} else {
+			// 相对路径，拼接当前页面URL
+			currentURL, _ := page.Eval(`window.location.href`)
+			if currentURL != nil {
+				baseURL, err := url.Parse(fmt.Sprintf("%v", currentURL.Value))
+				if err == nil {
+					fullURL = baseURL.ResolveReference(parsedURL).String()
+				}
+			}
+		}
+
+		if fullURL == "" || processedURLs[fullURL] {
+			continue
+		}
+
+		// 检查是否为同一域名（避免跳转到外部网站）
+		currentURL, _ := page.Eval(`window.location.hostname`)
+		if currentURL != nil {
+			currentHost := fmt.Sprintf("%v", currentURL.Value)
+			parsedFullURL, _ := url.Parse(fullURL)
+			if parsedFullURL.Host != "" && parsedFullURL.Host != currentHost {
+				log.Printf("[Rod] 链接 %d (%s) 指向外部网站，跳过", i+1, *href)
+				continue
+			}
+		}
+
+		processedURLs[fullURL] = true
+		targetLinks = append(targetLinks, fullURL)
+		log.Printf("[Rod] 待处理链接 %d: %s", len(targetLinks), fullURL)
+	}
+
+	// 同步处理每个链接（避免并发竞态问题）
+	for i, fullURL := range targetLinks {
+		log.Printf("[Rod] 处理链接 %d/%d: %s", i+1, len(targetLinks), fullURL)
+
+		// 带超时的页面跳转和内容提取（30秒超时）
+		contentDone := make(chan string, 1)
+		go func(url string) {
+			// 在新页面中打开
+			newPage := page.Browser().MustPage(url)
+			defer newPage.Close() // 使用Close而不是MustClose，避免panic
+
+			// 等待页面加载（带超时）
+			loadDone := make(chan error, 1)
+			go func() {
+				loadDone <- newPage.WaitLoad()
+			}()
+
+			select {
+			case err := <-loadDone:
+				if err != nil {
+					log.Printf("[Rod] 链接页面加载超时: %v", err)
+				}
+			case <-time.After(15 * time.Second):
+				log.Printf("[Rod] 链接页面加载超时(15s)，继续提取")
+			}
+
+			// 提取内容（带超时）
+			tabContent, err := newPage.Eval(`document.body.innerText`)
+			if err != nil || tabContent == nil {
+				contentDone <- ""
+				return
+			}
+			contentDone <- fmt.Sprintf("%v", tabContent.Value)
+		}(fullURL)
+
+		select {
+		case content := <-contentDone:
+			if content != "" {
+				allText.WriteString(" ")
+				allText.WriteString(content)
+				log.Printf("[Rod] 链接页面内容提取完成: %s", fullURL)
+			}
+		case <-time.After(30 * time.Second):
+			log.Printf("[Rod] 链接 %s 处理超时(30s)，跳过", fullURL)
+		}
+	}
 }
