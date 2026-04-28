@@ -347,7 +347,8 @@ func (s *BulkRodService) executeOneSearch(keyword, cityQuery string, searchRecor
 	companies, err := s.rodSvc.SearchNearby(RodSearchRequest{
 		Keyword:  keyword,
 		City:     cityQuery,
-		MaxCount: 30,
+		MaxCount: 1000,
+		Radius:   50000, // 50km
 	})
 	if err != nil {
 		return 0, 0, err
