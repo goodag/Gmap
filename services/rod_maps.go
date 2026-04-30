@@ -24,18 +24,22 @@ import (
 
 // RodMapsService 使用无头浏览器直接爬取 Google Maps
 type RodMapsService struct {
-	proxyAddr  string
-	chromePath string
-	stopFlag   bool
-	mu         sync.Mutex
+	proxyAddr     string
+	chromePath    string
+	stopFlag      bool
+	antiBlockFlag bool
+	retryCount    int
+	mu            sync.Mutex
 }
 
 func NewRodMapsService() *RodMapsService {
 	cfg := config.Get()
 	return &RodMapsService{
-		proxyAddr:  cfg.Proxy.Address,
-		chromePath: cfg.Proxy.ChromePath,
-		stopFlag:   false,
+		proxyAddr:     cfg.Proxy.Address,
+		chromePath:    cfg.Proxy.ChromePath,
+		stopFlag:      false,
+		antiBlockFlag: false,
+		retryCount:    0,
 	}
 }
 
@@ -59,6 +63,40 @@ func (s *RodMapsService) ShouldStop() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stopFlag
+}
+
+// SetAntiBlock 设置反爬命中标志
+func (s *RodMapsService) SetAntiBlock(blocked bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.antiBlockFlag = blocked
+	if blocked {
+		s.retryCount++
+	} else {
+		s.retryCount = 0
+	}
+}
+
+// IsBlocked 检查是否命中反爬
+func (s *RodMapsService) IsBlocked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.antiBlockFlag
+}
+
+// GetRetryCount 获取重试次数
+func (s *RodMapsService) GetRetryCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.retryCount
+}
+
+// ResetAntiBlock 重置反爬标志
+func (s *RodMapsService) ResetAntiBlock() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.antiBlockFlag = false
+	s.retryCount = 0
 }
 
 // RodSearchRequest Rod搜索请求
@@ -606,6 +644,124 @@ func (s *RodMapsService) hasNoResultsMessage(page *rod.Page) bool {
 	return false
 }
 
+// isAntiBlocked 检测是否命中 Google 反爬机制
+func (s *RodMapsService) isAntiBlocked(page *rod.Page) bool {
+	title, err := page.Timeout(2 * time.Second).Element("title")
+	if err == nil {
+		titleText, _ := title.Text()
+		titleText = strings.ToLower(titleText)
+		if strings.Contains(titleText, "google") &&
+			(strings.Contains(titleText, "verify") ||
+				strings.Contains(titleText, "captcha") ||
+				strings.Contains(titleText, "unusual") ||
+				strings.Contains(titleText, "access denied")) {
+			log.Printf("[Rod] ⚠️ 检测到反爬页面标题: %s", titleText)
+			return true
+		}
+	}
+
+	captchaSelectors := []string{
+		"div.g-recaptcha",
+		"iframe[src*='recaptcha']",
+		"iframe[src*='captcha']",
+		"#captcha",
+		".captcha",
+		"[data-captcha]",
+		"div[role='presentation'] iframe",
+	}
+	for _, sel := range captchaSelectors {
+		el, err := page.Timeout(1 * time.Second).Element(sel)
+		if err == nil && el != nil {
+			log.Printf("[Rod] ⚠️ 检测到验证码元素: %s", sel)
+			return true
+		}
+	}
+
+	body, err := page.Timeout(2 * time.Second).Element("body")
+	if err == nil && body != nil {
+		text, err := body.Text()
+		if err == nil {
+			text = strings.ToLower(text)
+			blockKeywords := []string{
+				"verify you are not a robot",
+				"please verify",
+				"human verification",
+				"unusual traffic detected",
+				"access denied",
+				"we have detected unusual traffic",
+				"system detected unusual traffic",
+				"暂时无法访问",
+				"访问被拒绝",
+				"需要验证",
+				"人机验证",
+				"验证您是真人",
+			}
+			for _, kw := range blockKeywords {
+				if strings.Contains(text, kw) {
+					log.Printf("[Rod] ⚠️ 检测到反爬提示: %s", kw)
+					return true
+				}
+			}
+		}
+	}
+
+	loginSelectors := []string{
+		"a[href*='accounts.google.com']",
+		"a[href*='/signin']",
+	}
+	for _, sel := range loginSelectors {
+		el, err := page.Timeout(1 * time.Second).Element(sel)
+		if err == nil && el != nil {
+			loginCount, _ := page.Elements("a[href*='accounts.google.com'], a[href*='/signin']")
+			if len(loginCount) >= 3 {
+				log.Printf("[Rod] ⚠️ 检测到登录页面，可能被反爬")
+				return true
+			}
+		}
+	}
+
+	noResultCount := 0
+	for i := 0; i < 3; i++ {
+		if s.hasNoResultsMessage(page) {
+			noResultCount++
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if noResultCount >= 2 {
+		log.Printf("[Rod] ⚠️ 多次检测无结果，可能被限流")
+		return true
+	}
+
+	return false
+}
+
+// handleAntiBlock 处理反爬命中情况
+func (s *RodMapsService) handleAntiBlock(page *rod.Page) error {
+	retryCount := s.GetRetryCount()
+	log.Printf("[Rod] 🚨 命中反爬，第 %d 次重试", retryCount)
+
+	s.SetAntiBlock(true)
+	s.debugScreenshot(page, fmt.Sprintf("anti_block_%d", retryCount))
+
+	switch {
+	case retryCount <= 2:
+		waitTime := time.Duration(retryCount*5) * time.Second
+		log.Printf("[Rod] 等待 %v 后重试...", waitTime)
+		time.Sleep(waitTime)
+		return fmt.Errorf("命中反爬，已重试 %d 次，等待后重试", retryCount)
+
+	case retryCount <= 5:
+		waitTime := time.Duration(retryCount*10+30) * time.Second
+		log.Printf("[Rod] 等待 %v 后重试（增加等待时间）...", waitTime)
+		time.Sleep(waitTime)
+		return fmt.Errorf("命中反爬，已重试 %d 次，延长等待时间后重试", retryCount)
+
+	default:
+		log.Printf("[Rod] ❌ 反爬重试次数过多，请检查网络环境或更换代理")
+		return fmt.Errorf("命中反爬，重试 %d 次仍失败，请检查网络环境或更换代理", retryCount)
+	}
+}
+
 // scrollAndCollect 滚动搜索结果并收集商家基本信息
 func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBusinessResult {
 	results := make([]RodBusinessResult, 0)
@@ -664,6 +820,30 @@ func (s *RodMapsService) scrollAndCollect(page *rod.Page, maxCount int) []RodBus
 
 // extractListItems 使用 Rod 原生 DOM 方法提取商家列表（彻底避免 JS eval）
 func (s *RodMapsService) extractListItems(page *rod.Page) []RodBusinessResult {
+	results := make([]RodBusinessResult, 0)
+	_ = make(map[string]bool) // seenNames 占位，避免未使用变量错误
+
+	// 使用超时上下文，避免长时间阻塞
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var seenNames map[string]bool
+		results, seenNames = s.extractListItemsInternal(page)
+		_ = seenNames // 避免未使用变量错误
+	}()
+
+	select {
+	case <-done:
+		log.Printf("[Rod] 本次提取到 %d 个商家", len(results))
+		return results
+	case <-time.After(10 * time.Second):
+		log.Printf("[Rod] ⚠️ 提取商家列表超时，返回已收集的 %d 个商家", len(results))
+		return results
+	}
+}
+
+// extractListItemsInternal 内部提取逻辑
+func (s *RodMapsService) extractListItemsInternal(page *rod.Page) ([]RodBusinessResult, map[string]bool) {
 	results := make([]RodBusinessResult, 0)
 	seenNames := make(map[string]bool)
 
@@ -730,8 +910,129 @@ func (s *RodMapsService) extractListItems(page *rod.Page) []RodBusinessResult {
 		}
 	}
 
-	log.Printf("[Rod] 本次提取到 %d 个商家", len(results))
-	return results
+	// 方式4: 尝试通过搜索结果卡片选择器提取（Google Maps 新版页面结构）
+	if len(results) == 0 {
+		cards, err := page.Elements(`div.Nv2PK.THOPZb.CpccDe`)
+		if err == nil && len(cards) > 0 {
+			log.Printf("[Rod] 找到 %d 个 Nv2PK 卡片", len(cards))
+			for _, card := range cards {
+				biz := s.extractFromCard(card)
+				if biz.Name != "" && !seenNames[biz.Name] {
+					seenNames[biz.Name] = true
+					results = append(results, biz)
+				}
+			}
+		}
+	}
+
+	// 方式5: 尝试通过动态渲染的搜索结果区域
+	if len(results) == 0 {
+		resultContainers, err := page.Elements(`div.m6QErb.DxyBCb`)
+		if err == nil && len(resultContainers) > 0 {
+			log.Printf("[Rod] 找到 %d 个 m6QErb 容器", len(resultContainers))
+			for _, container := range resultContainers {
+				linksInContainer, _ := container.Elements(`a[href*="/maps/place/"]`)
+				for _, link := range linksInContainer {
+					biz := s.extractFromLink(link)
+					if biz.Name != "" && !seenNames[biz.Name] {
+						seenNames[biz.Name] = true
+						results = append(results, biz)
+					}
+				}
+			}
+		}
+	}
+
+	// 方式6: 尝试通过标题选择器直接提取
+	if len(results) == 0 {
+		headings, err := page.Elements(`h3.fontHeadlineSmall, h3.qBF1Pd`)
+		if err == nil && len(headings) > 0 {
+			log.Printf("[Rod] 找到 %d 个标题元素", len(headings))
+			for _, heading := range headings {
+				name, _ := heading.Text()
+				name = strings.TrimSpace(name)
+				if name != "" && len(name) > 2 && len(name) < 200 && !seenNames[name] {
+					// 尝试从父容器找链接
+					parent, err := heading.Parent()
+					if err == nil {
+						link, _ := parent.Element(`a[href*="/maps/place/"]`)
+						if link != nil {
+							href := s.getAttr(link, "href")
+							placeID, lat, lng := s.parseHref(href)
+							seenNames[name] = true
+							results = append(results, RodBusinessResult{
+								Name:      name,
+								Href:      href,
+								PlaceID:   placeID,
+								Latitude:  lat,
+								Longitude: lng,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 如果所有方式都没找到，记录调试信息（异步执行，不阻塞）
+	if len(results) == 0 {
+		log.Printf("[Rod] ⚠️ 所有提取方式均未找到商家，可能页面结构已变化或被反爬")
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Rod] 调试截图失败: %v", r)
+				}
+			}()
+			s.debugScreenshot(page, "no_results_debug")
+			log.Printf("[Rod] 页面 HTML 片段: %s", s.getPageSnippet(page))
+		}()
+	}
+
+	return results, seenNames
+}
+
+// extractFromCard 从搜索结果卡片提取商家信息
+func (s *RodMapsService) extractFromCard(card *rod.Element) RodBusinessResult {
+	biz := RodBusinessResult{}
+
+	// 找链接
+	link, err := card.Element(`a[href*="/maps/place/"]`)
+	if err == nil && link != nil {
+		href := s.getAttr(link, "href")
+		biz.Href = href
+		biz.PlaceID, biz.Latitude, biz.Longitude = s.parseHref(href)
+	}
+
+	// 找名称
+	nameSelectors := []string{`.qBF1Pd`, `.fontHeadlineSmall`, `.NrDZNb`, `h3`, `[role="heading"]`}
+	for _, sel := range nameSelectors {
+		nameEl, err := card.Element(sel)
+		if err == nil {
+			text, _ := nameEl.Text()
+			text = strings.TrimSpace(text)
+			if text != "" && len(text) > 2 && len(text) < 200 {
+				biz.Name = text
+				break
+			}
+		}
+	}
+
+	// 如果名称为空，尝试从 aria-label 获取
+	if biz.Name == "" {
+		ariaLabel, _ := card.Attribute("aria-label")
+		if ariaLabel != nil && *ariaLabel != "" {
+			biz.Name = strings.TrimSpace(*ariaLabel)
+		}
+	}
+
+	// 提取评分和评论数
+	text, _ := card.Text()
+	if text != "" {
+		biz.Rating = s.extractRating(text)
+		biz.ReviewCount = s.extractReviewCount(text)
+	}
+
+	return biz
 }
 
 // extractFromLink 从一个 place 链接提取商家信息
