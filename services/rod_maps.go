@@ -179,15 +179,13 @@ func (s *RodMapsService) SearchNearby(req RodSearchRequest) ([]models.Company, e
 		return nil, fmt.Errorf("导航失败: %w", err)
 	}
 
-	// 等待页面加载（Google Maps SPA 用 WaitStable 代替 WaitLoad）
-	_ = page.Timeout(15 * time.Second).WaitStable(time.Second)
+	// 等待页面加载完成
+	err = page.Timeout(30 * time.Second).WaitLoad()
 	if err != nil {
-		return nil, fmt.Errorf("页面加载超时: %w", err)
+		log.Printf("[Rod] WaitLoad 超时，尝试继续: %v", err)
 	}
 
-	// EvalOnNewDocument 会在每个新文档自动执行，无需再次注入
-
-	// 等待 Google Maps 动态内容加载
+	// 额外等待 Google Maps 动态内容加载
 	time.Sleep(3 * time.Second)
 
 	// 截图调试
