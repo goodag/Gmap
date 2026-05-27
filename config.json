@@ -14,17 +14,55 @@
         "custom_search_id": "YOUR_CUSTOM_SEARCH_ENGINE_ID"
     },
     "email": {
-        "smtp_host": "smtp.qq.com",
-        "smtp_port": 465,
-        "username": "530784848@qq.com",
-        "password": "edxrwmxlludobifi",
-        "from_name": "商家搜索系统",
-        "useSsl": true,
+        "accounts": [
+            {
+                "smtp_host": "smtp.qiye.163.com",
+                "smtp_port": 465,
+                "username": "delia@bolsonsteelpipe.com",
+                "password": "k2RjZSBsphwqhy2#",
+                "from_name": "Delia-Bolson"
+            },
+            {
+                "smtp_host": "smtp.163.com",
+                "smtp_port": 465,
+                "username": "salesbolsonsteel@163.com",
+                "password": "QBUKAJqCcxkNiQa7",
+                "from_name": "Delia-Bolson"
+            },
+            {
+                "smtp_host": "smtp.163.com",
+                "smtp_port": 465,
+                "username": "deliabolsonsteel@163.com",
+                "password": "XKdNgWJARe7mTdKr",
+                "from_name": "Delia-Bolson"
+            },
+            {
+                "smtp_host": "smtp.126.com",
+                "smtp_port": 465,
+                "username": "salesbolsonsteel@126.com",
+                "password": "FFddw37bWrgh8t9C",
+                "from_name": "Delia-Bolson"
+            },
+            {
+                "smtp_host": "smtp.126.com",
+                "smtp_port": 465,
+                "username": "deliabolsonsteel@126.com",
+                "password": "BLdir7RDQFdXW34q",
+                "from_name": "Delia-Bolson"
+            },
+            {
+                "smtp_host": "smtp.163.com",
+                "smtp_port": 465,
+                "username": "sales_bolsonsteel@163.com",
+                "password": "TXdRMqWkSZ2qbnNe",
+                "from_name": "Delia-Bolson"
+            }
+        ],
         "auto_send_enabled": false,
-        "test_mode": true,
-        "test_recipient": "962280751@qq.com",
+        "test_mode": false,
+        "test_recipient": "deliabolsonsteel@163.com",
         "cooldown_minutes": 1,
-        "marketing_subject": "Summer Resort Hats for Your Store"
+        "marketing_subject": "Delia-Bolson"
     },
     "proxy": {
         "enabled": true,

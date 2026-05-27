@@ -49,17 +49,22 @@ type GoogleConfig struct {
 	CustomSearchID string `json:"custom_search_id"` // Google Custom Search Engine ID
 }
 
+// EmailAccount 单个邮箱账户配置
+type EmailAccount struct {
+	SMTPHost string `json:"smtp_host"`
+	SMTPPort int    `json:"smtp_port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	FromName string `json:"from_name"`
+}
+
 type EmailConfig struct {
-	SMTPHost         string `json:"smtp_host"`
-	SMTPPort         int    `json:"smtp_port"`
-	Username         string `json:"username"`
-	Password         string `json:"password"`
-	FromName         string `json:"from_name"`
-	AutoSendEnabled  bool   `json:"auto_send_enabled"`
-	TestMode         bool   `json:"test_mode"`
-	TestRecipient    string `json:"test_recipient"`
-	CooldownMinutes  int    `json:"cooldown_minutes"`
-	MarketingSubject string `json:"marketing_subject"`
+	Accounts         []EmailAccount `json:"accounts"` // 多个发件邮箱配置
+	AutoSendEnabled  bool           `json:"auto_send_enabled"`
+	TestMode         bool           `json:"test_mode"`
+	TestRecipient    string         `json:"test_recipient"`
+	CooldownMinutes  int            `json:"cooldown_minutes"`
+	MarketingSubject string         `json:"marketing_subject"`
 }
 
 var (
@@ -73,7 +78,7 @@ func Get() *Config {
 			Server:   ServerConfig{Port: "8088"},
 			Database: DatabaseConfig{Host: "127.0.0.1", Port: "3306", User: "root", Password: "", DBName: "google_map_search"},
 			Google:   GoogleConfig{APIKey: "", CustomSearchID: ""},
-			Email:    EmailConfig{SMTPHost: "smtp.gmail.com", SMTPPort: 587, Username: "", Password: "", FromName: "Google Map Search", AutoSendEnabled: false, TestMode: true, TestRecipient: "", CooldownMinutes: 1440, MarketingSubject: "Summer Resort Hats for Your Store"},
+			Email:    EmailConfig{Accounts: []EmailAccount{{SMTPHost: "smtp.gmail.com", SMTPPort: 587, Username: "", Password: "", FromName: "Google Map Search"}}, AutoSendEnabled: false, TestMode: true, TestRecipient: "", CooldownMinutes: 1440, MarketingSubject: "Summer Resort Hats for Your Store"},
 			Proxy:    ProxyConfig{Enabled: false, Address: "", ChromePath: ""},
 			Doubao:   DoubaoConfig{APIKey: "", ModelID: "Doubao-Seed-2.0-lite", BaseURL: "https://ark.cn-beijing.volces.com/api/v3", Enabled: false},
 		}

@@ -422,7 +422,7 @@ func (s *RodMapsService) EnsureBrowser() error {
 	}
 
 	l := launcher.New().
-		Leakless(false).
+		Leakless(true).
 		Headless(true).
 		Set("no-sandbox").
 		Set("disable-gpu").
@@ -454,7 +454,7 @@ func (s *RodMapsService) launchBrowser() (*rod.Browser, error) {
 	}
 
 	l := launcher.New().
-		Leakless(false).
+		Leakless(true).
 		Headless(true).
 		Set("disable-gpu").
 		Set("no-sandbox").
@@ -1528,7 +1528,7 @@ func (s *RodMapsService) ScrapeWebsiteWithRod(urlStr string) *ScrapedPage {
 	result.URL = urlStr
 
 	l := launcher.New().
-		Leakless(false).
+		Leakless(true).
 		Headless(true).
 		Set("no-sandbox").
 		Set("disable-gpu").

@@ -31,7 +31,7 @@ func main() {
 
 	// 自动迁移（仅在数据库连接成功时）
 	if db != nil {
-		db.AutoMigrate(&models.SearchRecord{}, &models.Company{}, &models.CompanyEmail{}, &models.EmailLog{}, &models.CronTask{}, &models.BulkRodProgress{})
+		db.AutoMigrate(&models.SearchRecord{}, &models.Company{}, &models.CompanyEmail{}, &models.EmailLog{}, &models.CronTask{}, &models.BulkRodProgress{}, &models.EmailTemplate{}, &models.Category{}, &models.CategoryTemplate{})
 	}
 
 	// 启动定时任务调度器（仅在数据库连接成功时）
@@ -51,21 +51,25 @@ func main() {
 	// 初始化 handlers（仅在数据库连接成功时）
 	var searchHandler *handlers.SearchHandler
 	var emailHandler *handlers.EmailHandler
+	var emailTemplateHandler *handlers.EmailTemplateHandler
 	var scraperHandler *handlers.ScraperHandler
 	var googleSearchHandler *handlers.GoogleSearchHandler
 	var cronHandler *handlers.CronHandler
 	var exportHandler *handlers.ExportHandler
 	var bulkRodHandler *handlers.BulkRodHandler
+	var categoryHandler *handlers.CategoryHandler
 
 	if db != nil {
 		searchHandler = handlers.NewSearchHandler(db)
 		emailHandler = handlers.NewEmailHandler(db)
+		emailTemplateHandler = handlers.NewEmailTemplateHandler(db)
 		scraperHandler = handlers.NewScraperHandler(db)
 		googleSearchHandler = handlers.NewGoogleSearchHandler(db)
 		cronHandler = handlers.NewCronHandler(db, scheduler)
 		exportHandler = handlers.NewExportHandler(db)
 		bulkRodSvc := services.NewBulkRodService(db)
 		bulkRodHandler = handlers.NewBulkRodHandler(db, bulkRodSvc)
+		categoryHandler = handlers.NewCategoryHandler(db)
 	}
 
 	cityHandler := handlers.NewCityHandler()
@@ -125,6 +129,33 @@ func main() {
 			api.POST("/email/batch-send", emailHandler.BatchSendEmail)
 			api.GET("/email/logs", emailHandler.GetEmailLogs)
 			api.GET("/email/cooldown", emailHandler.CheckCooldown)
+		}
+
+		if emailTemplateHandler != nil {
+			// 邮件模板管理
+			api.POST("/email-template", emailTemplateHandler.CreateTemplate)
+			api.PUT("/email-template/:id", emailTemplateHandler.UpdateTemplate)
+			api.DELETE("/email-template/:id", emailTemplateHandler.DeleteTemplate)
+			api.GET("/email-template/:id", emailTemplateHandler.GetTemplate)
+			api.GET("/email-templates", emailTemplateHandler.ListTemplates)
+			api.GET("/email-templates-with-categories", emailTemplateHandler.ListTemplatesWithCategories)
+			// 使用随机模板发送邮件
+			api.POST("/email-template/send/:record_id", emailTemplateHandler.SendWithRandomTemplate)
+			// 使用指定品类发送邮件
+			api.POST("/email-template/send/:record_id/category", emailTemplateHandler.SendWithCategory)
+			// 下载Excel模板
+			api.GET("/email-template/send/template", emailTemplateHandler.DownloadEmailTemplate)
+			// 使用指定模板向Excel中的邮箱列表发送邮件
+			api.POST("/email-template/:id/send", emailTemplateHandler.SendTemplateToEmails)
+		}
+
+		if categoryHandler != nil {
+			// 品类管理
+			api.POST("/category", categoryHandler.CreateCategory)
+			api.PUT("/category/:id", categoryHandler.UpdateCategory)
+			api.DELETE("/category/:id", categoryHandler.DeleteCategory)
+			api.GET("/category/:id", categoryHandler.GetCategory)
+			api.GET("/categories", categoryHandler.ListCategories)
 		}
 
 		if scraperHandler != nil {

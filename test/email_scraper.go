@@ -311,7 +311,7 @@ func (s *EmailScraper) findChromeBin() string {
 
 func (s *EmailScraper) launchBrowser(chromeBin string) (*rod.Browser, error) {
 	l := launcher.New().
-		Leakless(false).
+		Leakless(true).
 		Headless(true).
 		Set("no-sandbox").
 		Set("disable-gpu").

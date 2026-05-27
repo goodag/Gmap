@@ -211,8 +211,8 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 	})
 
 	// 表头（按用户需求顺序）
-	headers := []string{"序号", "公司名称", "地址", "电话", "官网", "邮箱", "评分", "Facebook", "Instagram", "行业", "来源", "业务简介", "主营产品"}
-	colWidths := []float64{8, 30, 40, 20, 40, 35, 8, 40, 40, 30, 15, 50, 50}
+	headers := []string{"序号", "公司名称", "地址", "电话", "官网号码", "官网", "邮箱", "评分", "Facebook", "Instagram", "行业", "来源", "业务简介", "主营产品"}
+	colWidths := []float64{8, 30, 40, 20, 35, 40, 35, 8, 40, 40, 30, 15, 50, 50}
 
 	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
@@ -221,16 +221,21 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 		f.SetColWidth(sheet, string(rune('A'+i)), string(rune('A'+i)), colWidths[i])
 	}
 
-	// 数据行
-	for i, co := range companies {
-		row := i + 2
-
-		// 合并邮箱
-		emails := ""
+	// 数据行（一个邮箱占用一行）
+	currentRow := 2
+	serialNumber := 1
+	for _, co := range companies {
+		// 获取所有邮箱
+		var emailList []string
 		if em, ok := emailMap[co.ID]; ok && len(em) > 0 {
-			emails = joinStrings(em, "\n")
+			emailList = em
 		} else if co.Email != "" {
-			emails = co.Email
+			emailList = []string{co.Email}
+		}
+
+		// 如果没有邮箱，至少输出一行
+		if len(emailList) == 0 {
+			emailList = []string{""}
 		}
 
 		// 来源映射
@@ -254,48 +259,74 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 			product = extractProduct(co.BodyText)
 		}
 
-		// 设置单元格值
-		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), i+1)
-		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), co.Name)
-		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), co.FormattedAddress)
-		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), co.Phone)
-		
-		// 官网设为超链接
-		if co.Website != "" {
-			f.SetCellValue(sheet, fmt.Sprintf("E%d", row), co.Website)
-			f.SetCellHyperLink(sheet, fmt.Sprintf("E%d", row), co.Website, "External")
-			f.SetCellStyle(sheet, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), linkStyle)
-		}
-		
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), emails)
-		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), co.Rating)
-		
-		// Facebook设为超链接
-		if facebook != "" {
-			f.SetCellValue(sheet, fmt.Sprintf("H%d", row), facebook)
-			f.SetCellHyperLink(sheet, fmt.Sprintf("H%d", row), facebook, "External")
-			f.SetCellStyle(sheet, fmt.Sprintf("H%d", row), fmt.Sprintf("H%d", row), linkStyle)
-		}
-		
-		// Instagram设为超链接
-		if instagram != "" {
-			f.SetCellValue(sheet, fmt.Sprintf("I%d", row), instagram)
-			f.SetCellHyperLink(sheet, fmt.Sprintf("I%d", row), instagram, "External")
-			f.SetCellStyle(sheet, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), linkStyle)
-		}
-		
-		f.SetCellValue(sheet, fmt.Sprintf("J%d", row), co.Types)
-		f.SetCellValue(sheet, fmt.Sprintf("K%d", row), source)
-		f.SetCellValue(sheet, fmt.Sprintf("L%d", row), co.CompanyIntro)
-		f.SetCellValue(sheet, fmt.Sprintf("M%d", row), product)
-
-		// 设置数据样式
-		for col := 1; col <= 13; col++ {
-			cell, _ := excelize.CoordinatesToCellName(col, row)
-			// 网站、Facebook、Instagram列单独设了链接样式
-			if col != 5 && col != 8 && col != 9 {
-				f.SetCellStyle(sheet, cell, cell, dataStyle)
+		// 处理官网号码（从 ScrapedPhones 字段获取）
+		var scrapedPhones string
+		if co.ScrapedPhones != "" {
+			var phoneList []string
+			if err := json.Unmarshal([]byte(co.ScrapedPhones), &phoneList); err == nil && len(phoneList) > 0 {
+				scrapedPhones = strings.Join(phoneList, "\n")
 			}
+		}
+
+		// 为每个邮箱创建一行
+		for emailIndex, email := range emailList {
+			row := currentRow
+
+			// 设置单元格值（只有第一行显示序号）
+			if emailIndex == 0 {
+				f.SetCellValue(sheet, fmt.Sprintf("A%d", row), serialNumber)
+				serialNumber++
+			}
+
+			f.SetCellValue(sheet, fmt.Sprintf("B%d", row), co.Name)
+			f.SetCellValue(sheet, fmt.Sprintf("C%d", row), co.FormattedAddress)
+			f.SetCellValue(sheet, fmt.Sprintf("D%d", row), co.Phone)
+
+			// 官网号码（从网站爬取的所有号码，多个用换行分隔）
+			if emailIndex == 0 {
+				f.SetCellValue(sheet, fmt.Sprintf("E%d", row), scrapedPhones)
+			}
+
+			// 官网设为超链接（只有第一行设置）
+			if emailIndex == 0 && co.Website != "" {
+				f.SetCellValue(sheet, fmt.Sprintf("F%d", row), co.Website)
+				f.SetCellHyperLink(sheet, fmt.Sprintf("F%d", row), co.Website, "External")
+				f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), linkStyle)
+			}
+
+			// 邮箱（每个邮箱占一行）
+			f.SetCellValue(sheet, fmt.Sprintf("G%d", row), email)
+			f.SetCellValue(sheet, fmt.Sprintf("H%d", row), co.Rating)
+
+			// Facebook设为超链接（只有第一行设置）
+			if emailIndex == 0 && facebook != "" {
+				f.SetCellValue(sheet, fmt.Sprintf("I%d", row), facebook)
+				f.SetCellHyperLink(sheet, fmt.Sprintf("I%d", row), facebook, "External")
+				f.SetCellStyle(sheet, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), linkStyle)
+			}
+
+			// Instagram设为超链接（只有第一行设置）
+			if emailIndex == 0 && instagram != "" {
+				f.SetCellValue(sheet, fmt.Sprintf("J%d", row), instagram)
+				f.SetCellHyperLink(sheet, fmt.Sprintf("J%d", row), instagram, "External")
+				f.SetCellStyle(sheet, fmt.Sprintf("J%d", row), fmt.Sprintf("J%d", row), linkStyle)
+			}
+
+			f.SetCellValue(sheet, fmt.Sprintf("K%d", row), co.Types)
+			f.SetCellValue(sheet, fmt.Sprintf("L%d", row), source)
+			f.SetCellValue(sheet, fmt.Sprintf("M%d", row), co.CompanyIntro)
+			f.SetCellValue(sheet, fmt.Sprintf("N%d", row), product)
+
+			// 设置数据样式
+			for col := 1; col <= 14; col++ {
+				cell, _ := excelize.CoordinatesToCellName(col, row)
+				// 网站、Facebook、Instagram列单独设了链接样式
+				if col != 6 && col != 9 && col != 10 {
+					f.SetCellStyle(sheet, cell, cell, dataStyle)
+				}
+			}
+
+			currentRow++
 		}
 	}
 
@@ -310,7 +341,7 @@ func (h *ExportHandler) buildExcel(companies []models.Company, emailMap map[uint
 	})
 
 	// 自动筛选
-	lastCell, _ := excelize.CoordinatesToCellName(13, len(companies)+1)
+	lastCell, _ := excelize.CoordinatesToCellName(13, currentRow-1)
 	f.AutoFilter(sheet, "A1:"+lastCell, nil)
 
 	log.Printf("[Export] 导出 %s: %d 条商家数据", sheetTitle, len(companies))
