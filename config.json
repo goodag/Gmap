@@ -26,7 +26,7 @@
         "chrome_path": ""
     },
     "doubao": {
-        "api_key": "7d3c9f66-8827-4bc7-b33a-af910c7ede46",
+        "api_key": "7d3c9f660c7ede46",
         "model_id": "Doubao-Seed-2.0-lite",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "enabled": false
